@@ -1,0 +1,10 @@
+{
+    "archive_root": "chats",
+    "projects": [
+        {
+            "id": "ai-chat-archive",
+            "name": "AI Chat Archive",
+            "root_path": "."
+        }
+    ]
+}

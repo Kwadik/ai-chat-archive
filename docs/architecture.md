@@ -28,26 +28,13 @@ Project
    └── Chat
          │
          └── Message
-````
+```
 
 ### Project
 
 A user-defined workspace representing a real task, application, research topic, or other body of work.
 
 A project may contain chats from multiple AI providers.
-
-Example:
-
-```text
-AI Chat Archive
-├── ChatGPT
-│   ├── Architecture
-│   └── Debugging
-├── Claude
-│   └── Code review
-└── Gemini
-    └── Research
-```
 
 ### Chat
 
@@ -57,11 +44,11 @@ A chat belongs to exactly one project.
 
 A chat has:
 
-* stable provider-specific ID;
-* provider name;
-* current title;
-* project ID;
-* ordered messages.
+- stable provider-specific ID;
+- provider name;
+- current title;
+- project ID;
+- ordered messages.
 
 ### Message
 
@@ -79,14 +66,14 @@ AI providers are adapters, not part of the core storage model.
 
 Initial MVP provider:
 
-* ChatGPT
+- ChatGPT
 
 Future providers may include:
 
-* Claude
-* Gemini
-* local AI services
-* other web-based AI interfaces
+- Claude
+- Gemini
+- local AI services
+- other web-based AI interfaces
 
 Provider-specific code must be isolated behind a common adapter interface.
 
@@ -118,13 +105,12 @@ projects/
 └── ai-chat-archive/
     └── chats/
         ├── chatgpt/
-        │   └── 6aad32da-81fc-83eb-8da3-9b197b5f87b8/
+        │   └── <chat-id>/
         │       ├── title.txt
         │       ├── chat.json
         │       ├── 001-user.md
         │       ├── 002-assistant.md
         │       └── ...
-        │
         └── claude/
             └── ...
 ```
@@ -135,36 +121,13 @@ Do not store the complete conversation inside a large JSON document.
 
 `chat.json` is metadata/index information only.
 
-Example:
-
-```json
-{
-    "id": "6aad32da-81fc-83eb-8da3-9b197b5f87b8",
-    "provider": "chatgpt",
-    "project_id": "ai-chat-archive",
-    "title": "Offline Markdown Viewer",
-    "messages": [
-        {
-            "number": 1,
-            "role": "user",
-            "file": "001-user.md"
-        },
-        {
-            "number": 2,
-            "role": "assistant",
-            "file": "002-assistant.md"
-        }
-    ]
-}
-```
-
 ---
 
 ## 5. Message Metadata
 
 Message content and message metadata are separate concerns.
 
-The Markdown file remains the primary source of the message content. Metadata is stored separately and is used for searching, filtering, indexing and navigation.
+The Markdown file remains the primary source of message content. Metadata is stored separately and is used for searching, filtering, indexing and navigation.
 
 Each message should have a minimal metadata record containing at least:
 
@@ -181,25 +144,16 @@ The metadata model should be extensible.
 
 Possible future metadata may include:
 
-* `updated_at`;
-* provider-specific message ID;
-* parent/response relationship;
-* tags;
-* attachments;
-* detected language;
-* content type;
-* other provider-specific or application-level attributes.
+- `updated_at`;
+- provider-specific message ID;
+- parent/response relationship;
+- tags;
+- attachments;
+- detected language;
+- content type;
+- other provider-specific or application-level attributes.
 
-The architecture should allow additional metadata to be introduced without changing the Markdown storage format.
-
-The message timestamp belongs to the **Message**, not only to the Chat. This allows the archive to answer queries such as:
-
-* messages from a specific date;
-* messages from the last N days;
-* messages within a date range;
-* messages from a particular project;
-* messages from a particular provider;
-* messages by role.
+The message timestamp belongs to the **Message**, not only to the Chat.
 
 Metadata should remain lightweight. It must not become a second copy of the message content.
 
@@ -219,20 +173,20 @@ Therefore the architecture must support filtering by message metadata, especiall
 
 Initial filtering dimensions should include:
 
-* project;
-* provider;
-* chat;
-* message role;
-* creation date/time;
-* date ranges.
+- project;
+- provider;
+- chat;
+- message role;
+- creation date/time;
+- date ranges.
 
 The architecture should allow additional filters to be introduced later, such as:
 
-* tags;
-* content type;
-* attachments;
-* language;
-* other metadata.
+- tags;
+- content type;
+- attachments;
+- language;
+- other metadata.
 
 Search implementation is intentionally not prescribed by the MVP architecture.
 
@@ -246,32 +200,20 @@ Search results should reference the original Chat and Message rather than creati
 
 ---
 
-
 ## 7. Markdown Preservation
 
 The archive should preserve the Markdown returned by the AI interface whenever possible.
 
 In particular, preserve:
 
-* fenced code blocks;
-* programming-language identifiers;
-* tables;
-* lists;
-* links;
-* headings;
-* blockquotes;
-* inline formatting.
-
-Example:
-
-````markdown
-```python
-def hello():
-    print("Hello")
-```
-````
-
-must remain Markdown rather than being converted to HTML during storage.
+- fenced code blocks;
+- programming-language identifiers;
+- tables;
+- lists;
+- links;
+- headings;
+- blockquotes;
+- inline formatting.
 
 HTML conversion belongs to the viewer layer.
 
@@ -289,17 +231,15 @@ name
 root_path
 ```
 
-A project may be associated with multiple providers and multiple chats.
-
 The initial MVP may support a single configured project while keeping the data model capable of supporting multiple projects.
 
 Future browser-extension settings should provide:
 
-* create project;
-* rename project;
-* select project;
-* change project path;
-* remove project from the extension configuration.
+- create project;
+- rename project;
+- select project;
+- change project path;
+- remove project from extension configuration.
 
 Removing a project from configuration must not automatically delete its files.
 
@@ -335,22 +275,22 @@ Web Viewer
 
 Responsible for:
 
-* detecting supported AI services;
-* identifying the current chat;
-* obtaining Markdown content;
-* detecting chat title;
-* selecting the target project;
-* sending data to the local server.
+- detecting supported AI services;
+- identifying the current chat;
+- obtaining Markdown content;
+- detecting chat title;
+- selecting the target project;
+- sending data to the local server.
 
 ### Local Python Server
 
 Responsible for:
 
-* filesystem access;
-* project configuration;
-* chat storage;
-* local HTTP API;
-* serving the viewer.
+- filesystem access;
+- project configuration;
+- chat storage;
+- local HTTP API;
+- serving the viewer.
 
 ### Viewer
 
@@ -377,7 +317,6 @@ static/
 │   ├── base.css
 │   ├── viewer.css
 │   └── toc.css
-│
 └── js/
     ├── viewer.js
     ├── toc.js
@@ -386,10 +325,10 @@ static/
 
 Responsibilities should remain separated:
 
-* Python — application and data logic;
-* Jinja2 — HTML structure;
-* CSS — presentation;
-* JavaScript — browser interaction.
+- Python — application and data logic;
+- Jinja2 — HTML structure;
+- CSS — presentation;
+- JavaScript — browser interaction.
 
 This is important both for maintainability and for working with AI assistants: individual files should remain small enough to inspect and modify independently.
 
@@ -398,8 +337,6 @@ This is important both for maintainability and for working with AI assistants: i
 ## 11. Local API
 
 The Chrome extension communicates with the local server through HTTP.
-
-The exact API is intentionally kept small in the MVP.
 
 Initial conceptual endpoints:
 
@@ -413,6 +350,8 @@ POST /api/chats/<provider>/<chat_id>/sync
 PUT  /api/chats/<provider>/<chat_id>/title
 
 POST /api/chats/<provider>/<chat_id>/messages
+
+GET  /api/search?...
 ```
 
 The API is local-only and should listen on `127.0.0.1`.
@@ -444,30 +383,32 @@ The project follows these principles:
 
 ### Included
 
-* local Python server;
-* file-based storage;
-* Markdown messages;
-* project-aware data model;
-* ChatGPT provider adapter;
-* Chrome extension;
-* chat title and ID detection;
-* user/assistant message separation;
-* local viewer;
-* Jinja2 templates;
-* separated CSS and JavaScript;
-* basic project configuration.
+- local Python server;
+- file-based storage;
+- Markdown messages;
+- message metadata;
+- project-aware data model;
+- search/filtering architecture;
+- ChatGPT provider adapter;
+- Chrome extension;
+- chat title and ID detection;
+- user/assistant message separation;
+- local viewer;
+- Jinja2 templates;
+- separated CSS and JavaScript;
+- basic project configuration.
 
 ### Not required initially
 
-* cloud synchronization;
-* database;
-* authentication;
-* embeddings;
-* RAG;
-* semantic search;
-* automatic conversation analysis;
-* support for every AI provider;
-* complex project management UI.
+- cloud synchronization;
+- database;
+- authentication;
+- embeddings;
+- RAG;
+- semantic search;
+- automatic conversation analysis;
+- support for every AI provider;
+- complex project management UI.
 
 The architecture should allow these features to be added later without replacing the storage model.
 
@@ -491,5 +432,3 @@ instead of an entire large application.
 Therefore:
 
 > **Small, cohesive, independently understandable files are a first-class architectural requirement.**
-
-```
