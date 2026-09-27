@@ -1,200 +1,451 @@
-import json
-from pathlib import Path
-from typing import List, Optional, Tuple
+from __future__ import annotations
 
-from chat.models import Chat, Message, Project, current_utc_iso
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from .models import Chat, Message, Project, ensure_utc
+
+
+class ProjectNotFoundError(FileNotFoundError):
+    """Raised when a requested project does not exist."""
+
+
+class ChatNotFoundError(FileNotFoundError):
+    """Raised when a requested chat does not exist."""
 
 
 class FileStorage:
     """
-    File-based storage implementation following Option A:
-    projects/
-    └── <project_id>/
-        ├── project.json
-        └── chats/
-            └── <provider>/
-                └── <chat_id>/
-                    ├── chat.json
-                    ├── 001-user.md
-                    ├── 002-assistant.md
-                    └── ...
+    Filesystem storage.
+
+    Layout:
+
+        projects/
+        └── <project_id>/
+            ├── project.json
+            └── chats/
+                └── <provider>/
+                    └── <chat_id>/
+                        ├── chat.json
+                        ├── 001-user.md
+                        ├── 002-assistant.md
+                        └── ...
     """
 
-    def __init__(self, projects_dir: Path | str):
+    def __init__(self, projects_dir: str | Path) -> None:
         self.projects_dir = Path(projects_dir)
-        self.projects_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- Project Management ---
+    # ------------------------------------------------------------------
+    # Generic JSON helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _datetime_to_json(value: datetime) -> str:
+        return ensure_utc(value).isoformat()
+
+    @staticmethod
+    def _datetime_from_json(value: str) -> datetime:
+        parsed = datetime.fromisoformat(value)
+        return ensure_utc(parsed)
+
+    @staticmethod
+    def _write_json(path: Path, data: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        path.write_text(
+            json.dumps(
+                data,
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _read_json(path: Path) -> dict[str, Any]:
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    # ------------------------------------------------------------------
+    # Project paths
+    # ------------------------------------------------------------------
 
     def get_project_dir(self, project_id: str) -> Path:
         return self.projects_dir / project_id
 
-    def save_project(self, project: Project) -> Project:
-        proj_dir = self.get_project_dir(project.id)
-        proj_dir.mkdir(parents=True, exist_ok=True)
+    def get_project_file(self, project_id: str) -> Path:
+        return self.get_project_dir(project_id) / "project.json"
 
-        proj_file = proj_dir / "project.json"
-        if proj_file.exists():
-            # Update updated_at if modified
-            project.updated_at = current_utc_iso()
+    def get_chats_dir(self, project_id: str) -> Path:
+        return self.get_project_dir(project_id) / "chats"
 
-        with open(proj_file, "w", encoding="utf-8") as f:
-            json.dump(project.to_dict(), f, ensure_ascii=False, indent=2)
+    # ------------------------------------------------------------------
+    # Project operations
+    # ------------------------------------------------------------------
 
-        return project
+    def save_project(self, project: Project) -> None:
+        project_dir = self.get_project_dir(project.id)
+        project_dir.mkdir(parents=True, exist_ok=True)
 
-    def load_project(self, project_id: str) -> Optional[Project]:
-        proj_file = self.get_project_dir(project_id) / "project.json"
-        if not proj_file.exists():
-            return None
+        data = {
+            "id": project.id,
+            "name": project.name,
+            "description": project.description,
+            "root_path": project.root_path,
+            "created_at": self._datetime_to_json(project.created_at),
+            "updated_at": self._datetime_to_json(project.updated_at),
+        }
 
-        with open(proj_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return Project.from_dict(data)
-
-    def list_projects(self) -> List[Project]:
-        projects = []
-        for p in self.projects_dir.iterdir():
-            if p.is_dir():
-                project = self.load_project(p.name)
-                if project:
-                    projects.append(project)
-        return projects
-
-    # --- Chat Storage & Synchronization ---
-
-    def get_chat_dir(self, project_id: str, provider: str, chat_id: str) -> Path:
-        return self.get_project_dir(project_id) / "chats" / provider.lower() / chat_id
-
-    def save_chat(self, chat: Chat) -> Chat:
-        """
-        Saves or updates a chat without creating duplicates.
-        Preserves original `created_at` timestamps for existing messages.
-        Updates `updated_at` timestamps when content changes.
-        """
-        # Ensure parent project exists
-        if not self.load_project(chat.project_id):
-            self.save_project(Project(id=chat.project_id, name=chat.project_id))
-
-        chat_dir = self.get_chat_dir(chat.project_id, chat.provider, chat.id)
-        chat_dir.mkdir(parents=True, exist_ok=True)
-
-        existing_chat = self.load_chat(chat.project_id, chat.provider, chat.id)
-        existing_messages_by_num = (
-            {m.number: m for m in existing_chat.messages} if existing_chat else {}
+        self._write_json(
+            self.get_project_file(project.id),
+            data,
         )
 
-        now = current_utc_iso()
-        processed_messages: List[Message] = []
+    def load_project(self, project_id: str) -> Project:
+        path = self.get_project_file(project_id)
 
-        for msg in chat.messages:
-            existing_msg = existing_messages_by_num.get(msg.number)
+        if not path.exists():
+            raise ProjectNotFoundError(
+                f"Project not found: {project_id}"
+            )
 
-            if existing_msg:
-                # Keep initial created_at
-                msg.created_at = existing_msg.created_at
+        data = self._read_json(path)
 
-                # Check if content or metadata changed
-                if existing_msg.content != msg.content or existing_msg.metadata != msg.metadata:
-                    msg.updated_at = now
-                else:
-                    msg.updated_at = existing_msg.updated_at
-            else:
-                # New message
-                if not msg.created_at:
-                    msg.created_at = now
-                msg.updated_at = now
+        return Project(
+            id=data["id"],
+            name=data["name"],
+            description=data.get("description", ""),
+            root_path=data.get("root_path", ""),
+            created_at=self._datetime_from_json(data["created_at"]),
+            updated_at=self._datetime_from_json(data["updated_at"]),
+        )
 
-            # Ensure file_name is properly formatted
-            if not msg.file_name:
-                msg.file_name = f"{msg.number:03d}-{msg.role}.md"
+    def list_projects(self) -> list[Project]:
+        if not self.projects_dir.exists():
+            return []
 
-            # Write Markdown file
-            md_path = chat_dir / msg.file_name
-            with open(md_path, "w", encoding="utf-8") as f:
-                f.write(msg.content)
+        projects: list[Project] = []
 
-            processed_messages.append(msg)
+        for project_dir in sorted(self.projects_dir.iterdir()):
+            if not project_dir.is_dir():
+                continue
 
-        # Update chat meta
-        if existing_chat:
-            chat.created_at = existing_chat.created_at
-            chat.updated_at = now
-        else:
-            if not chat.created_at:
-                chat.created_at = now
-            chat.updated_at = now
+            project_file = project_dir / "project.json"
 
-        chat.messages = processed_messages
+            if not project_file.exists():
+                continue
 
-        # Save metadata index chat.json
-        chat_json_path = chat_dir / "chat.json"
-        with open(chat_json_path, "w", encoding="utf-8") as f:
-            json.dump(chat.to_dict(), f, ensure_ascii=False, indent=2)
+            projects.append(
+                self.load_project(project_dir.name)
+            )
 
-        return chat
+        return projects
 
-    def load_chat(self, project_id: str, provider: str, chat_id: str) -> Optional[Chat]:
-        chat_dir = self.get_chat_dir(project_id, provider, chat_id)
-        chat_json_path = chat_dir / "chat.json"
+    # ------------------------------------------------------------------
+    # Chat paths
+    # ------------------------------------------------------------------
 
-        if not chat_json_path.exists():
-            return None
+    def get_chat_dir(
+        self,
+        project_id: str,
+        provider: str,
+        chat_id: str,
+    ) -> Path:
+        return (
+            self.get_chats_dir(project_id)
+            / provider
+            / chat_id
+        )
 
-        with open(chat_json_path, "r", encoding="utf-8") as f:
-            chat_data = json.load(f)
+    def get_chat_file(
+        self,
+        project_id: str,
+        provider: str,
+        chat_id: str,
+    ) -> Path:
+        return self.get_chat_dir(
+            project_id,
+            provider,
+            chat_id,
+        ) / "chat.json"
 
-        messages = []
-        for msg_meta in chat_data.get("messages", []):
-            file_name = msg_meta.get("file_name", f"{msg_meta['number']:03d}-{msg_meta['role']}.md")
-            md_path = chat_dir / file_name
+    # ------------------------------------------------------------------
+    # Chat operations
+    # ------------------------------------------------------------------
+
+    def save_chat(self, chat: Chat) -> None:
+        """
+        Save chat metadata and message Markdown files.
+
+        The project must already exist.
+
+        Existing message files are updated in place.
+        Their original created_at is preserved when the same
+        message number already exists.
+
+        Existing orphan Markdown files are intentionally not deleted.
+        """
+
+        # Important:
+        # Do not silently create a project here.
+        self.load_project(chat.project_id)
+
+        chat_dir = self.get_chat_dir(
+            chat.project_id,
+            chat.provider,
+            chat.id,
+        )
+        chat_dir.mkdir(parents=True, exist_ok=True)
+
+        existing_chat: Chat | None = None
+
+        chat_file = chat_dir / "chat.json"
+
+        if chat_file.exists():
+            existing_chat = self.load_chat(
+                chat.project_id,
+                chat.provider,
+                chat.id,
+            )
+
+        existing_messages: dict[int, Message] = {}
+
+        if existing_chat is not None:
+            existing_messages = {
+                message.number: message
+                for message in existing_chat.messages
+            }
+
+        # Save messages.
+        for message in chat.messages:
+            existing_message = existing_messages.get(
+                message.number
+            )
+
+            if existing_message is not None:
+                # Preserve creation time.
+                message.created_at = existing_message.created_at
+
+            message.updated_at = message.updated_at
+
+            message_path = chat_dir / message.file_name
+
+            message_path.write_text(
+                message.content,
+                encoding="utf-8",
+            )
+
+        # Save chat metadata/index.
+        chat_data = {
+            "id": chat.id,
+            "provider": chat.provider,
+            "title": chat.title,
+            "project_id": chat.project_id,
+            "created_at": self._datetime_to_json(chat.created_at),
+            "updated_at": self._datetime_to_json(chat.updated_at),
+            "metadata": chat.metadata,
+            "messages": [
+                {
+                    "number": message.number,
+                    "role": message.role,
+                    "file_name": message.file_name,
+                    "created_at": self._datetime_to_json(
+                        message.created_at
+                    ),
+                    "updated_at": self._datetime_to_json(
+                        message.updated_at
+                    ),
+                    "metadata": message.metadata,
+                }
+                for message in chat.messages
+            ],
+        }
+
+        self._write_json(chat_file, chat_data)
+
+    def load_chat(
+        self,
+        project_id: str,
+        provider: str,
+        chat_id: str,
+    ) -> Chat:
+        chat_file = self.get_chat_file(
+            project_id,
+            provider,
+            chat_id,
+        )
+
+        if not chat_file.exists():
+            raise ChatNotFoundError(
+                f"Chat not found: "
+                f"{project_id}/{provider}/{chat_id}"
+            )
+
+        data = self._read_json(chat_file)
+
+        messages: list[Message] = []
+
+        for message_data in data.get("messages", []):
+            message_path = (
+                chat_file.parent
+                / message_data["file_name"]
+            )
+
             content = ""
-            if md_path.exists():
-                with open(md_path, "r", encoding="utf-8") as f:
-                    content = f.read()
 
-            msg = Message.from_dict(msg_meta, content=content)
-            messages.append(msg)
+            if message_path.exists():
+                content = message_path.read_text(
+                    encoding="utf-8"
+                )
 
-        return Chat.from_dict(chat_data, messages=messages)
+            messages.append(
+                Message(
+                    number=message_data["number"],
+                    role=message_data["role"],
+                    content=content,
+                    file_name=message_data["file_name"],
+                    created_at=self._datetime_from_json(
+                        message_data["created_at"]
+                    ),
+                    updated_at=self._datetime_from_json(
+                        message_data["updated_at"]
+                    ),
+                    metadata=message_data.get(
+                        "metadata",
+                        {},
+                    ),
+                )
+            )
 
-    # --- Cross-Project Search Helper ---
+        return Chat(
+            id=data["id"],
+            provider=data["provider"],
+            title=data["title"],
+            project_id=data["project_id"],
+            created_at=self._datetime_from_json(
+                data["created_at"]
+            ),
+            updated_at=self._datetime_from_json(
+                data["updated_at"]
+            ),
+            messages=messages,
+            metadata=data.get("metadata", {}),
+        )
+
+    # ------------------------------------------------------------------
+    # Metadata filtering
+    # ------------------------------------------------------------------
 
     def search_metadata(
         self,
-        query: Optional[str] = None,
-        project_id: Optional[str] = None,
-        provider: Optional[str] = None,
-    ) -> List[Tuple[str, Chat]]:
+        *,
+        project_id: str | None = None,
+        provider: str | None = None,
+        chat_id: str | None = None,
+        role: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> list[Chat]:
         """
-        Scans metadata across all projects without reading markdown files.
-        Demonstrates that Option A still allows instant global searching.
-        """
-        results = []
-        target_projects = [project_id] if project_id else [p.name for p in self.projects_dir.iterdir() if p.is_dir()]
+        Search using JSON metadata only.
 
-        for p_id in target_projects:
-            chats_base = self.get_project_dir(p_id) / "chats"
-            if not chats_base.exists():
+        Markdown content is not read during filtering.
+        """
+
+        results: list[Chat] = []
+
+        if not self.projects_dir.exists():
+            return results
+
+        for project_dir in self.projects_dir.iterdir():
+            if not project_dir.is_dir():
                 continue
 
-            for prov_dir in chats_base.iterdir():
-                if not prov_dir.is_dir():
-                    continue
-                if provider and prov_dir.name != provider.lower():
+            current_project_id = project_dir.name
+
+            if (
+                project_id is not None
+                and current_project_id != project_id
+            ):
+                continue
+
+            chats_dir = project_dir / "chats"
+
+            if not chats_dir.exists():
+                continue
+
+            for provider_dir in chats_dir.iterdir():
+                if not provider_dir.is_dir():
                     continue
 
-                for c_dir in prov_dir.iterdir():
-                    chat_json = c_dir / "chat.json"
-                    if chat_json.exists():
-                        with open(chat_json, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                            chat = Chat.from_dict(data)
+                current_provider = provider_dir.name
 
-                            if query:
-                                if query.lower() in chat.title.lower():
-                                    results.append((p_id, chat))
-                            else:
-                                results.append((p_id, chat))
+                if (
+                    provider is not None
+                    and current_provider != provider
+                ):
+                    continue
+
+                for chat_dir in provider_dir.iterdir():
+                    if not chat_dir.is_dir():
+                        continue
+
+                    current_chat_id = chat_dir.name
+
+                    if (
+                        chat_id is not None
+                        and current_chat_id != chat_id
+                    ):
+                        continue
+
+                    chat_file = chat_dir / "chat.json"
+
+                    if not chat_file.exists():
+                        continue
+
+                    data = self._read_json(chat_file)
+
+                    chat_created_at = (
+                        self._datetime_from_json(
+                            data["created_at"]
+                        )
+                    )
+
+                    if (
+                        created_after is not None
+                        and chat_created_at < ensure_utc(
+                            created_after
+                        )
+                    ):
+                        continue
+
+                    if (
+                        created_before is not None
+                        and chat_created_at > ensure_utc(
+                            created_before
+                        )
+                    ):
+                        continue
+
+                    if role is not None:
+                        message_roles = {
+                            message.get("role")
+                            for message in data.get(
+                                "messages",
+                                [],
+                            )
+                        }
+
+                        if role not in message_roles:
+                            continue
+
+                    results.append(
+                        self.load_chat(
+                            current_project_id,
+                            current_provider,
+                            current_chat_id,
+                        )
+                    )
 
         return results
