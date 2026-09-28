@@ -397,3 +397,129 @@ def test_updated_message_does_not_create_duplicate_files(
     assert (
         chat_dir / "001-user.md"
     ).read_text(encoding="utf-8") == "Changed"
+
+def test_chat_timestamps_are_saved_and_loaded(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    created_at = datetime(
+        2026,
+        1,
+        1,
+        10,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    updated_at = datetime(
+        2026,
+        1,
+        1,
+        10,
+        5,
+        tzinfo=timezone.utc,
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Test Chat",
+        project_id="project-1",
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+    storage.save_chat(chat)
+
+    loaded = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert loaded.created_at == created_at
+    assert loaded.updated_at == updated_at
+
+
+def test_updated_chat_preserves_created_at_and_updates_updated_at(
+    tmp_path,
+    monkeypatch,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    first_time = datetime(
+        2026,
+        1,
+        1,
+        10,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    second_time = datetime(
+        2026,
+        1,
+        1,
+        10,
+        5,
+        tzinfo=timezone.utc,
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Original Title",
+        project_id="project-1",
+        created_at=first_time,
+        updated_at=first_time,
+    )
+
+    storage.save_chat(chat)
+
+    loaded = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    original_created_at = loaded.created_at
+    original_updated_at = loaded.updated_at
+
+    monkeypatch.setattr(
+        "chat.storage.utc_now",
+        lambda: second_time,
+    )
+
+    updated_chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Changed Title",
+        project_id="project-1",
+        created_at=second_time,
+        updated_at=second_time,
+    )
+
+    storage.save_chat(updated_chat)
+
+    loaded = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert loaded.created_at == original_created_at
+    assert loaded.updated_at == second_time
+    assert loaded.updated_at != original_updated_at
