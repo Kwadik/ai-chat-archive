@@ -418,6 +418,8 @@ class FileStorage:
                 )
             )
 
+        messages.sort(key=lambda message: message.number)
+
         return Chat(
             id=data["id"],
             provider=data["provider"],

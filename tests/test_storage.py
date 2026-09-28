@@ -626,3 +626,168 @@ def test_list_chats_missing_project_raises(tmp_path):
         assert False, "Expected ProjectNotFoundError"
     except ProjectNotFoundError:
         pass
+
+def test_chat_and_message_metadata_are_preserved(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Test Chat",
+        project_id="project-1",
+        metadata={
+            "conversation_id": "provider-conversation-1",
+            "tags": ["python", "architecture"],
+        },
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Hello",
+                metadata={
+                    "language": "en",
+                    "source": "chatgpt",
+                },
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Hello!",
+                metadata={
+                    "model": "example-model",
+                    "tokens": 42,
+                },
+            ),
+        ],
+    )
+
+    storage.save_chat(chat)
+
+    loaded = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert loaded.metadata == {
+        "conversation_id": "provider-conversation-1",
+        "tags": ["python", "architecture"],
+    }
+
+    assert loaded.messages[0].metadata == {
+        "language": "en",
+        "source": "chatgpt",
+    }
+
+    assert loaded.messages[1].metadata == {
+        "model": "example-model",
+        "tokens": 42,
+    }
+
+def test_chat_messages_are_loaded_in_number_order(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Test Chat",
+        project_id="project-1",
+        messages=[
+            Message(
+                number=3,
+                role="assistant",
+                content="Third",
+            ),
+            Message(
+                number=1,
+                role="user",
+                content="First",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Second",
+            ),
+        ],
+    )
+
+    storage.save_chat(chat)
+
+    loaded = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert [
+        message.number
+        for message in loaded.messages
+    ] == [1, 2, 3]
+
+    assert [
+        message.content
+        for message in loaded.messages
+    ] == [
+        "First",
+        "Second",
+        "Third",
+    ]
+
+def test_list_chats_returns_deterministic_order(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    chats = [
+        Chat(
+            id="chat-2",
+            provider="chatgpt",
+            title="Chat 2",
+            project_id="project-1",
+        ),
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat 1",
+            project_id="project-1",
+        ),
+        Chat(
+            id="chat-1",
+            provider="claude",
+            title="Claude Chat",
+            project_id="project-1",
+        ),
+    ]
+
+    for chat in chats:
+        storage.save_chat(chat)
+
+    loaded_chats = storage.list_chats("project-1")
+
+    assert [
+        (chat.provider, chat.id)
+        for chat in loaded_chats
+    ] == [
+        ("chatgpt", "chat-1"),
+        ("chatgpt", "chat-2"),
+        ("claude", "chat-1"),
+    ]
