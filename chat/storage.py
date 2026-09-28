@@ -5,7 +5,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .models import Chat, Message, Project, ensure_utc
+from .models import (
+    Chat,
+    Message,
+    Project,
+    ensure_utc,
+    utc_now,
+)
 
 
 class ProjectNotFoundError(FileNotFoundError):
@@ -37,10 +43,6 @@ class FileStorage:
     def __init__(self, projects_dir: str | Path) -> None:
         self.projects_dir = Path(projects_dir)
 
-    # ------------------------------------------------------------------
-    # Generic JSON helpers
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _datetime_to_json(value: datetime) -> str:
         return ensure_utc(value).isoformat()
@@ -65,36 +67,43 @@ class FileStorage:
 
     @staticmethod
     def _read_json(path: Path) -> dict[str, Any]:
-        return json.loads(path.read_text(encoding="utf-8"))
-
-    # ------------------------------------------------------------------
-    # Project paths
-    # ------------------------------------------------------------------
+        return json.loads(
+            path.read_text(encoding="utf-8")
+        )
 
     def get_project_dir(self, project_id: str) -> Path:
         return self.projects_dir / project_id
 
     def get_project_file(self, project_id: str) -> Path:
-        return self.get_project_dir(project_id) / "project.json"
+        return (
+            self.get_project_dir(project_id)
+            / "project.json"
+        )
 
     def get_chats_dir(self, project_id: str) -> Path:
-        return self.get_project_dir(project_id) / "chats"
-
-    # ------------------------------------------------------------------
-    # Project operations
-    # ------------------------------------------------------------------
+        return (
+            self.get_project_dir(project_id)
+            / "chats"
+        )
 
     def save_project(self, project: Project) -> None:
         project_dir = self.get_project_dir(project.id)
-        project_dir.mkdir(parents=True, exist_ok=True)
+        project_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         data = {
             "id": project.id,
             "name": project.name,
             "description": project.description,
             "root_path": project.root_path,
-            "created_at": self._datetime_to_json(project.created_at),
-            "updated_at": self._datetime_to_json(project.updated_at),
+            "created_at": self._datetime_to_json(
+                project.created_at
+            ),
+            "updated_at": self._datetime_to_json(
+                project.updated_at
+            ),
         }
 
         self._write_json(
@@ -115,10 +124,20 @@ class FileStorage:
         return Project(
             id=data["id"],
             name=data["name"],
-            description=data.get("description", ""),
-            root_path=data.get("root_path", ""),
-            created_at=self._datetime_from_json(data["created_at"]),
-            updated_at=self._datetime_from_json(data["updated_at"]),
+            description=data.get(
+                "description",
+                "",
+            ),
+            root_path=data.get(
+                "root_path",
+                "",
+            ),
+            created_at=self._datetime_from_json(
+                data["created_at"]
+            ),
+            updated_at=self._datetime_from_json(
+                data["updated_at"]
+            ),
         )
 
     def list_projects(self) -> list[Project]:
@@ -127,24 +146,26 @@ class FileStorage:
 
         projects: list[Project] = []
 
-        for project_dir in sorted(self.projects_dir.iterdir()):
+        for project_dir in sorted(
+            self.projects_dir.iterdir()
+        ):
             if not project_dir.is_dir():
                 continue
 
-            project_file = project_dir / "project.json"
+            project_file = (
+                project_dir / "project.json"
+            )
 
             if not project_file.exists():
                 continue
 
             projects.append(
-                self.load_project(project_dir.name)
+                self.load_project(
+                    project_dir.name
+                )
             )
 
         return projects
-
-    # ------------------------------------------------------------------
-    # Chat paths
-    # ------------------------------------------------------------------
 
     def get_chat_dir(
         self,
@@ -164,15 +185,36 @@ class FileStorage:
         provider: str,
         chat_id: str,
     ) -> Path:
-        return self.get_chat_dir(
-            project_id,
-            provider,
-            chat_id,
-        ) / "chat.json"
+        return (
+            self.get_chat_dir(
+                project_id,
+                provider,
+                chat_id,
+            )
+            / "chat.json"
+        )
 
-    # ------------------------------------------------------------------
-    # Chat operations
-    # ------------------------------------------------------------------
+    @staticmethod
+    def _message_changed(
+        old: Message,
+        new: Message,
+    ) -> bool:
+        return (
+            old.role != new.role
+            or old.content != new.content
+            or old.file_name != new.file_name
+            or old.metadata != new.metadata
+        )
+
+    @staticmethod
+    def _chat_changed(
+        old: Chat,
+        new: Chat,
+    ) -> bool:
+        return (
+            old.title != new.title
+            or old.metadata != new.metadata
+        )
 
     def save_chat(self, chat: Chat) -> None:
         """
@@ -180,15 +222,18 @@ class FileStorage:
 
         The project must already exist.
 
-        Existing message files are updated in place.
-        Their original created_at is preserved when the same
-        message number already exists.
+        For an existing chat:
 
-        Existing orphan Markdown files are intentionally not deleted.
+        - chat.created_at is preserved;
+        - message.created_at is preserved;
+        - changed messages receive a new updated_at;
+        - unchanged messages keep their updated_at;
+        - chat.updated_at changes when chat or message data changes.
+
+        Existing orphan Markdown files are intentionally
+        not deleted.
         """
 
-        # Important:
-        # Do not silently create a project here.
         self.load_project(chat.project_id)
 
         chat_dir = self.get_chat_dir(
@@ -196,7 +241,11 @@ class FileStorage:
             chat.provider,
             chat.id,
         )
-        chat_dir.mkdir(parents=True, exist_ok=True)
+
+        chat_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         existing_chat: Chat | None = None
 
@@ -209,6 +258,9 @@ class FileStorage:
                 chat.id,
             )
 
+        if existing_chat is not None:
+            chat.created_at = existing_chat.created_at
+
         existing_messages: dict[int, Message] = {}
 
         if existing_chat is not None:
@@ -217,33 +269,73 @@ class FileStorage:
                 for message in existing_chat.messages
             }
 
-        # Save messages.
+        chat_changed = False
+
+        if existing_chat is not None:
+            chat_changed = self._chat_changed(
+                existing_chat,
+                chat,
+            )
+
         for message in chat.messages:
             existing_message = existing_messages.get(
                 message.number
             )
 
-            if existing_message is not None:
-                # Preserve creation time.
-                message.created_at = existing_message.created_at
+            if existing_message is None:
+                chat_changed = True
 
-            message.updated_at = message.updated_at
+                message.created_at = ensure_utc(
+                    message.created_at
+                )
+                message.updated_at = ensure_utc(
+                    message.updated_at
+                )
 
-            message_path = chat_dir / message.file_name
+            elif self._message_changed(
+                existing_message,
+                message,
+            ):
+                chat_changed = True
+
+                message.created_at = (
+                    existing_message.created_at
+                )
+                message.updated_at = utc_now()
+
+            else:
+                message.created_at = (
+                    existing_message.created_at
+                )
+                message.updated_at = (
+                    existing_message.updated_at
+                )
+
+            message_path = (
+                chat_dir / message.file_name
+            )
 
             message_path.write_text(
                 message.content,
                 encoding="utf-8",
             )
 
-        # Save chat metadata/index.
+        if existing_chat is not None and chat_changed:
+            chat.updated_at = utc_now()
+        elif existing_chat is not None:
+            chat.updated_at = existing_chat.updated_at
+
         chat_data = {
             "id": chat.id,
             "provider": chat.provider,
             "title": chat.title,
             "project_id": chat.project_id,
-            "created_at": self._datetime_to_json(chat.created_at),
-            "updated_at": self._datetime_to_json(chat.updated_at),
+            "created_at": self._datetime_to_json(
+                chat.created_at
+            ),
+            "updated_at": self._datetime_to_json(
+                chat.updated_at
+            ),
             "metadata": chat.metadata,
             "messages": [
                 {
@@ -262,7 +354,10 @@ class FileStorage:
             ],
         }
 
-        self._write_json(chat_file, chat_data)
+        self._write_json(
+            chat_file,
+            chat_data,
+        )
 
     def load_chat(
         self,
@@ -286,7 +381,10 @@ class FileStorage:
 
         messages: list[Message] = []
 
-        for message_data in data.get("messages", []):
+        for message_data in data.get(
+            "messages",
+            [],
+        ):
             message_path = (
                 chat_file.parent
                 / message_data["file_name"]
@@ -304,7 +402,9 @@ class FileStorage:
                     number=message_data["number"],
                     role=message_data["role"],
                     content=content,
-                    file_name=message_data["file_name"],
+                    file_name=message_data[
+                        "file_name"
+                    ],
                     created_at=self._datetime_from_json(
                         message_data["created_at"]
                     ),
@@ -330,12 +430,11 @@ class FileStorage:
                 data["updated_at"]
             ),
             messages=messages,
-            metadata=data.get("metadata", {}),
+            metadata=data.get(
+                "metadata",
+                {},
+            ),
         )
-
-    # ------------------------------------------------------------------
-    # Metadata filtering
-    # ------------------------------------------------------------------
 
     def search_metadata(
         self,
@@ -350,7 +449,7 @@ class FileStorage:
         """
         Search using JSON metadata only.
 
-        Markdown content is not read during filtering.
+        Markdown content is not used for filtering.
         """
 
         results: list[Chat] = []
@@ -399,12 +498,16 @@ class FileStorage:
                     ):
                         continue
 
-                    chat_file = chat_dir / "chat.json"
+                    chat_file = (
+                        chat_dir / "chat.json"
+                    )
 
                     if not chat_file.exists():
                         continue
 
-                    data = self._read_json(chat_file)
+                    data = self._read_json(
+                        chat_file
+                    )
 
                     chat_created_at = (
                         self._datetime_from_json(
@@ -414,7 +517,8 @@ class FileStorage:
 
                     if (
                         created_after is not None
-                        and chat_created_at < ensure_utc(
+                        and chat_created_at
+                        < ensure_utc(
                             created_after
                         )
                     ):
@@ -422,7 +526,8 @@ class FileStorage:
 
                     if (
                         created_before is not None
-                        and chat_created_at > ensure_utc(
+                        and chat_created_at
+                        > ensure_utc(
                             created_before
                         )
                     ):
