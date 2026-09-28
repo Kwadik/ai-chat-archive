@@ -1585,3 +1585,88 @@ def test_save_message_writes_markdown_file(
     assert message_path.read_text(encoding="utf-8") == (
         "# Answer\n\nUseful information."
     )
+
+def test_search_metadata_filters_by_exact_chat_id(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-123",
+            provider="chatgpt",
+            title="First Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-123-extra",
+            provider="chatgpt",
+            title="Second Chat",
+            project_id="project-1",
+        )
+    )
+
+    results = storage.search_metadata(
+        chat_id="chat-123",
+    )
+
+    assert [chat.id for chat in results] == [
+        "chat-123",
+    ]
+
+def test_search_metadata_without_filters_returns_all_chats(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+
+    storage.save_project(
+        Project(
+            id="project-2",
+            name="Project Two",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-b",
+            provider="chatgpt",
+            title="Chat B",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-a",
+            provider="chatgpt",
+            title="Chat A",
+            project_id="project-2",
+        )
+    )
+
+    results = storage.search_metadata()
+
+    assert [
+        (chat.project_id, chat.provider, chat.id)
+        for chat in results
+    ] == [
+        ("project-1", "chatgpt", "chat-b"),
+        ("project-2", "chatgpt", "chat-a"),
+    ]
