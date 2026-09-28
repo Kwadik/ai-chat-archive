@@ -2,10 +2,10 @@ from datetime import datetime, timezone
 
 from chat.models import Chat, Message, Project
 from chat.storage import (
+    ChatNotFoundError,
     FileStorage,
     ProjectNotFoundError,
 )
-
 
 def test_project_save_and_load(tmp_path):
     storage = FileStorage(tmp_path / "projects")
@@ -523,3 +523,106 @@ def test_updated_chat_preserves_created_at_and_updates_updated_at(
     assert loaded.created_at == original_created_at
     assert loaded.updated_at == second_time
     assert loaded.updated_at != original_updated_at
+
+def test_missing_chat_raises(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    try:
+        storage.load_chat(
+            "project-1",
+            "chatgpt",
+            "missing-chat",
+        )
+        assert False, "Expected ChatNotFoundError"
+    except ChatNotFoundError:
+        pass
+
+def test_list_chats_returns_chats_from_project(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    first_chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="First Chat",
+        project_id="project-1",
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Question",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Answer",
+            ),
+        ],
+    )
+
+    second_chat = Chat(
+        id="chat-2",
+        provider="claude",
+        title="Second Chat",
+        project_id="project-1",
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Hello",
+            ),
+        ],
+    )
+
+    storage.save_chat(first_chat)
+    storage.save_chat(second_chat)
+
+    chats = storage.list_chats("project-1")
+
+    assert len(chats) == 2
+
+    chat_by_id = {
+        chat.id: chat
+        for chat in chats
+    }
+
+    assert chat_by_id["chat-1"].provider == "chatgpt"
+    assert chat_by_id["chat-1"].title == "First Chat"
+
+    assert [
+        message.number
+        for message in chat_by_id["chat-1"].messages
+    ] == [1, 2]
+
+    assert [
+        message.content
+        for message in chat_by_id["chat-1"].messages
+    ] == [
+        "Question",
+        "Answer",
+    ]
+
+    assert chat_by_id["chat-2"].provider == "claude"
+    assert chat_by_id["chat-2"].title == "Second Chat"
+
+def test_list_chats_missing_project_raises(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    try:
+        storage.list_chats("missing-project")
+        assert False, "Expected ProjectNotFoundError"
+    except ProjectNotFoundError:
+        pass

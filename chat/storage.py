@@ -436,6 +436,45 @@ class FileStorage:
             ),
         )
 
+    def list_chats(self, project_id: str) -> list[Chat]:
+        """
+        Return all chats belonging to a project.
+
+        Chat metadata and message content are loaded from the
+        filesystem. The project must already exist.
+        """
+        self.load_project(project_id)
+
+        chats_dir = self.get_chats_dir(project_id)
+
+        if not chats_dir.exists():
+            return []
+
+        chats: list[Chat] = []
+
+        for provider_dir in sorted(chats_dir.iterdir()):
+            if not provider_dir.is_dir():
+                continue
+
+            for chat_dir in sorted(provider_dir.iterdir()):
+                if not chat_dir.is_dir():
+                    continue
+
+                chat_file = chat_dir / "chat.json"
+
+                if not chat_file.exists():
+                    continue
+
+                chats.append(
+                    self.load_chat(
+                        project_id,
+                        provider_dir.name,
+                        chat_dir.name,
+                    )
+                )
+
+        return chats
+
     def search_metadata(
         self,
         *,
