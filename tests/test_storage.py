@@ -1461,3 +1461,127 @@ def test_save_message_requires_existing_chat(tmp_path):
             chat_id="missing-chat",
             message=message,
         )
+
+def test_save_message_preserves_chat_created_at_and_updates_updated_at(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    created_at = datetime(
+        2026,
+        1,
+        15,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Python Learning",
+        project_id="project-1",
+        created_at=created_at,
+        updated_at=created_at,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Question",
+            ),
+        ],
+    )
+
+    storage.save_chat(chat)
+
+    before = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    message = Message(
+        number=0,
+        role="assistant",
+        content="Answer",
+    )
+
+    storage.save_message(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        message=message,
+    )
+
+    after = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert after.created_at == before.created_at
+    assert after.created_at == created_at
+    assert after.updated_at > before.updated_at
+
+def test_save_message_writes_markdown_file(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Python Learning",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="Question",
+                ),
+            ],
+        )
+    )
+
+    message = Message(
+        number=0,
+        role="assistant",
+        content="# Answer\n\nUseful information.",
+    )
+
+    storage.save_message(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        message=message,
+    )
+
+    message_path = (
+        tmp_path
+        / "projects"
+        / "project-1"
+        / "chats"
+        / "chatgpt"
+        / "chat-1"
+        / "002-assistant.md"
+    )
+
+    assert message_path.exists()
+    assert message_path.read_text(encoding="utf-8") == (
+        "# Answer\n\nUseful information."
+    )
