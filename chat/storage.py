@@ -360,6 +360,45 @@ class FileStorage:
             chat_data,
         )
 
+    def save_message(
+        self,
+        project_id: str,
+        provider: str,
+        chat_id: str,
+        message: Message,
+    ) -> None:
+        """
+        Save one message to an existing chat.
+
+        The chat must already exist.
+
+        The message number is assigned automatically as the
+        next number after the existing messages.
+        """
+
+        chat = self.load_chat(
+            project_id,
+            provider,
+            chat_id,
+        )
+
+        next_number = max(
+            (
+                existing_message.number
+                for existing_message in chat.messages
+            ),
+            default=0,
+        ) + 1
+
+        message.number = next_number
+        message.file_name = (
+            f"{message.number:03d}-{message.role}.md"
+        )
+
+        chat.messages.append(message)
+
+        self.save_chat(chat)
+
     def load_chat(
         self,
         project_id: str,

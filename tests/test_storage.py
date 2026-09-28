@@ -1,3 +1,5 @@
+import pytest
+
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1176,3 +1178,286 @@ def test_search_metadata_returns_chat_summary(
         "user",
         "assistant",
     }
+
+def test_save_message_to_existing_chat(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Python Learning",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="How does pytest work?",
+                ),
+            ],
+        )
+    )
+
+    message = Message(
+        number=2,
+        role="assistant",
+        content="# Pytest\n\nPytest runs tests.",
+    )
+
+    storage.save_message(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        message=message,
+    )
+
+    loaded_chat = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert len(loaded_chat.messages) == 2
+
+    assert loaded_chat.messages[1].number == 2
+    assert loaded_chat.messages[1].role == "assistant"
+    assert loaded_chat.messages[1].content == (
+        "# Pytest\n\nPytest runs tests."
+    )
+
+def test_save_message_assigns_next_number(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Python Learning",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="Question",
+                ),
+                Message(
+                    number=2,
+                    role="assistant",
+                    content="Answer",
+                ),
+            ],
+        )
+    )
+
+    message = Message(
+        number=0,
+        role="assistant",
+        content="Another useful answer",
+    )
+
+    storage.save_message(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        message=message,
+    )
+
+    loaded_chat = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert [
+        loaded_message.number
+        for loaded_message in loaded_chat.messages
+    ] == [1, 2, 3]
+
+    assert loaded_chat.messages[2].file_name == (
+        "003-assistant.md"
+    )
+    assert loaded_chat.messages[2].content == (
+        "Another useful answer"
+    )
+
+def test_save_message_ignores_orphan_markdown_for_numbering(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Python Learning",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="Question",
+                ),
+            ],
+        )
+    )
+
+    chat_dir = storage.get_chat_dir(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    (chat_dir / "999-orphan.md").write_text(
+        "Orphan content",
+        encoding="utf-8",
+    )
+
+    storage.save_message(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        message=Message(
+            number=0,
+            role="assistant",
+            content="Useful answer",
+        ),
+    )
+
+    assert (
+        chat_dir / "002-assistant.md"
+    ).exists()
+
+    assert (
+        chat_dir / "999-orphan.md"
+    ).exists()
+
+def test_save_message_preserves_metadata_and_timestamps(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Python Learning",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="Question",
+                ),
+            ],
+        )
+    )
+
+    created_at = datetime(
+        2026,
+        1,
+        15,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    updated_at = datetime(
+        2026,
+        1,
+        15,
+        12,
+        5,
+        tzinfo=timezone.utc,
+    )
+
+    message = Message(
+        number=0,
+        role="assistant",
+        content="# Answer\n\nUseful information.",
+        created_at=created_at,
+        updated_at=updated_at,
+        metadata={
+            "source": "chatgpt",
+            "model": "test-model",
+        },
+    )
+
+    storage.save_message(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        message=message,
+    )
+
+    loaded_chat = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    saved_message = loaded_chat.messages[-1]
+
+    assert saved_message.created_at == created_at
+    assert saved_message.metadata == {
+        "source": "chatgpt",
+        "model": "test-model",
+    }
+    assert saved_message.file_name == (
+        "002-assistant.md"
+    )
+
+def test_save_message_requires_existing_chat(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    message = Message(
+        number=0,
+        role="assistant",
+        content="Answer",
+    )
+
+    with pytest.raises(ChatNotFoundError):
+        storage.save_message(
+            project_id="project-1",
+            provider="chatgpt",
+            chat_id="missing-chat",
+            message=message,
+        )
