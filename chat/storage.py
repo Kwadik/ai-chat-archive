@@ -7,6 +7,7 @@ from typing import Any
 
 from .models import (
     Chat,
+    ChatSummary,
     Message,
     Project,
     ensure_utc,
@@ -477,6 +478,34 @@ class FileStorage:
 
         return chats
 
+    def _chat_summary_from_data(
+        self,
+        data: dict[str, Any],
+    ) -> ChatSummary:
+        return ChatSummary(
+            id=data["id"],
+            provider=data["provider"],
+            title=data["title"],
+            project_id=data["project_id"],
+            created_at=self._datetime_from_json(
+                data["created_at"]
+            ),
+            updated_at=self._datetime_from_json(
+                data["updated_at"]
+            ),
+            metadata=data.get(
+                "metadata",
+                {},
+            ),
+            message_roles={
+                message["role"]
+                for message in data.get(
+                    "messages",
+                    [],
+                )
+            },
+        )
+
     def search_metadata(
         self,
         *,
@@ -486,19 +515,21 @@ class FileStorage:
         role: str | None = None,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
-    ) -> list[Chat]:
+    ) -> list[ChatSummary]:
         """
         Search using JSON metadata only.
 
-        Markdown content is not used for filtering.
+        Markdown content is never loaded.
         """
 
-        results: list[Chat] = []
+        results: list[ChatSummary] = []
 
         if not self.projects_dir.exists():
             return results
 
-        for project_dir in self.projects_dir.iterdir():
+        for project_dir in sorted(
+            self.projects_dir.iterdir()
+        ):
             if not project_dir.is_dir():
                 continue
 
@@ -515,7 +546,9 @@ class FileStorage:
             if not chats_dir.exists():
                 continue
 
-            for provider_dir in chats_dir.iterdir():
+            for provider_dir in sorted(
+                chats_dir.iterdir()
+            ):
                 if not provider_dir.is_dir():
                     continue
 
@@ -527,7 +560,9 @@ class FileStorage:
                 ):
                     continue
 
-                for chat_dir in provider_dir.iterdir():
+                for chat_dir in sorted(
+                    provider_dir.iterdir()
+                ):
                     if not chat_dir.is_dir():
                         continue
 
@@ -550,48 +585,32 @@ class FileStorage:
                         chat_file
                     )
 
-                    chat_created_at = (
-                        self._datetime_from_json(
-                            data["created_at"]
+                    summary = (
+                        self._chat_summary_from_data(
+                            data
                         )
                     )
 
                     if (
                         created_after is not None
-                        and chat_created_at
-                        < ensure_utc(
-                            created_after
-                        )
+                        and summary.created_at
+                        < ensure_utc(created_after)
                     ):
                         continue
 
                     if (
                         created_before is not None
-                        and chat_created_at
-                        > ensure_utc(
-                            created_before
-                        )
+                        and summary.created_at
+                        > ensure_utc(created_before)
                     ):
                         continue
 
-                    if role is not None:
-                        message_roles = {
-                            message.get("role")
-                            for message in data.get(
-                                "messages",
-                                [],
-                            )
-                        }
+                    if (
+                        role is not None
+                        and role not in summary.message_roles
+                    ):
+                        continue
 
-                        if role not in message_roles:
-                            continue
-
-                    results.append(
-                        self.load_chat(
-                            current_project_id,
-                            current_provider,
-                            current_chat_id,
-                        )
-                    )
+                    results.append(summary)
 
         return results

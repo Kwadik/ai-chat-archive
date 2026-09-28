@@ -43,6 +43,29 @@ class Message:
         if not self.file_name:
             self.file_name = f"{self.number:03d}-{self.role}.md"
 
+@dataclass
+class ChatSummary:
+    """
+    Metadata-only representation of a chat.
+
+    Message Markdown content is intentionally not loaded.
+    """
+
+    id: str
+    provider: str
+    title: str
+    project_id: str
+
+    created_at: datetime
+    updated_at: datetime
+
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    message_roles: set[str] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        self.created_at = ensure_utc(self.created_at)
+        self.updated_at = ensure_utc(self.updated_at)
 
 @dataclass
 class Chat:

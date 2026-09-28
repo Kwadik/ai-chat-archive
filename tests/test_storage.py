@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
-from chat.models import Chat, Message, Project
+from chat.models import Chat, ChatSummary, Message, Project
 from chat.storage import (
     ChatNotFoundError,
     FileStorage,
@@ -791,3 +792,387 @@ def test_list_chats_returns_deterministic_order(tmp_path):
         ("chatgpt", "chat-2"),
         ("claude", "chat-1"),
     ]
+
+def test_search_metadata_does_not_read_message_markdown(
+    tmp_path,
+    monkeypatch,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Important Chat",
+        project_id="project-1",
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="This content should not be read",
+            ),
+        ],
+    )
+
+    storage.save_chat(chat)
+
+    original_read_text = Path.read_text
+
+    def fail_on_markdown(
+        self: Path,
+        *args,
+        **kwargs,
+    ):
+        if self.suffix == ".md":
+            raise AssertionError(
+                "Metadata search must not read Markdown files"
+            )
+
+        return original_read_text(
+            self,
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        Path,
+        "read_text",
+        fail_on_markdown,
+    )
+
+    results = storage.search_metadata(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+    )
+
+    assert len(results) == 1
+    assert results[0].id == "chat-1"
+
+def test_chat_summary_does_not_load_message_content(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Important Chat",
+        project_id="project-1",
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Secret message content",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Assistant response",
+            ),
+        ],
+    )
+
+    storage.save_chat(chat)
+
+    chat_data = storage._read_json(
+        storage.get_chat_file(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+    )
+
+    summary = storage._chat_summary_from_data(
+        chat_data
+    )
+
+    assert summary.id == "chat-1"
+    assert summary.provider == "chatgpt"
+    assert summary.title == "Important Chat"
+    assert summary.project_id == "project-1"
+    assert summary.message_roles == {
+        "user",
+        "assistant",
+    }
+
+def test_search_metadata_filters_by_project_provider_chat_and_role(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project 1",
+        )
+    )
+    storage.save_project(
+        Project(
+            id="project-2",
+            name="Project 2",
+        )
+    )
+
+    chats = [
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="ChatGPT User Chat",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="User message",
+                ),
+            ],
+        ),
+        Chat(
+            id="chat-2",
+            provider="chatgpt",
+            title="ChatGPT Assistant Chat",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="assistant",
+                    content="Assistant message",
+                ),
+            ],
+        ),
+        Chat(
+            id="chat-1",
+            provider="claude",
+            title="Claude User Chat",
+            project_id="project-1",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="Claude message",
+                ),
+            ],
+        ),
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Other Project Chat",
+            project_id="project-2",
+            messages=[
+                Message(
+                    number=1,
+                    role="user",
+                    content="Other project message",
+                ),
+            ],
+        ),
+    ]
+
+    for chat in chats:
+        storage.save_chat(chat)
+
+    results = storage.search_metadata(
+        project_id="project-1",
+        provider="chatgpt",
+        chat_id="chat-1",
+        role="user",
+    )
+
+    assert [
+        (
+            result.project_id,
+            result.provider,
+            result.id,
+        )
+        for result in results
+    ] == [
+        (
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+    ]
+
+def test_search_metadata_date_filters_include_boundaries(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    created_at = datetime(
+        2026,
+        1,
+        15,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+            created_at=created_at,
+            updated_at=created_at,
+        )
+    )
+
+    results_at_start = storage.search_metadata(
+        created_after=created_at,
+    )
+
+    results_at_end = storage.search_metadata(
+        created_before=created_at,
+    )
+
+    assert [
+        result.id
+        for result in results_at_start
+    ] == ["chat-1"]
+
+    assert [
+        result.id
+        for result in results_at_end
+    ] == ["chat-1"]
+
+def test_search_metadata_date_filters_exclude_outside_range(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    before = datetime(
+        2026,
+        1,
+        10,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    inside = datetime(
+        2026,
+        1,
+        15,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    after = datetime(
+        2026,
+        1,
+        20,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    for chat_id, created_at in [
+        ("chat-before", before),
+        ("chat-inside", inside),
+        ("chat-after", after),
+    ]:
+        storage.save_chat(
+            Chat(
+                id=chat_id,
+                provider="chatgpt",
+                title=chat_id,
+                project_id="project-1",
+                created_at=created_at,
+                updated_at=created_at,
+            )
+        )
+
+    results = storage.search_metadata(
+        created_after=inside,
+        created_before=inside,
+    )
+
+    assert [
+        result.id
+        for result in results
+    ] == ["chat-inside"]
+
+def test_search_metadata_returns_chat_summary(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Test Chat",
+        project_id="project-1",
+        metadata={
+            "model": "gpt-test",
+        },
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Hello",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Hi",
+            ),
+        ],
+    )
+
+    storage.save_chat(chat)
+
+    results = storage.search_metadata(
+        project_id="project-1",
+    )
+
+    assert len(results) == 1
+
+    result = results[0]
+
+    assert isinstance(result, ChatSummary)
+    assert result.id == "chat-1"
+    assert result.provider == "chatgpt"
+    assert result.title == "Test Chat"
+    assert result.project_id == "project-1"
+    assert result.metadata == {
+        "model": "gpt-test",
+    }
+    assert result.message_roles == {
+        "user",
+        "assistant",
+    }
