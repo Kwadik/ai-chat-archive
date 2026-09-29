@@ -447,3 +447,124 @@ def test_create_message(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join()
+
+def test_full_chat_workflow(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        client = ApiClient(
+            f"http://127.0.0.1:{server.server_address[1]}"
+        )
+
+        project = client.create_project(
+            id="project-1",
+            name="Test Project",
+        )
+
+        assert project == {
+            "id": "project-1",
+            "name": "Test Project",
+        }
+
+        chat = client.create_chat(
+            project_id="project-1",
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            metadata={
+                "url": "https://chatgpt.com/c/chat-1",
+            },
+        )
+
+        assert chat == {
+            "id": "chat-1",
+            "provider": "chatgpt",
+            "title": "Test Chat",
+        }
+
+        user_message = client.create_message(
+            project_id="project-1",
+            provider="chatgpt",
+            chat_id="chat-1",
+            role="user",
+            content="# Hello",
+        )
+
+        assert user_message == {
+            "number": 1,
+            "role": "user",
+            "file_name": "001-user.md",
+        }
+
+        assistant_message = client.create_message(
+            project_id="project-1",
+            provider="chatgpt",
+            chat_id="chat-1",
+            role="assistant",
+            content="Привет!",
+        )
+
+        assert assistant_message == {
+            "number": 2,
+            "role": "assistant",
+            "file_name": "002-assistant.md",
+        }
+
+        assert client.get_projects() == [
+            {
+                "id": "project-1",
+                "name": "Test Project",
+            }
+        ]
+
+        assert client.get_chats("project-1") == [
+            {
+                "id": "chat-1",
+                "provider": "chatgpt",
+                "title": "Test Chat",
+                "project_id": "project-1",
+            }
+        ]
+
+        assert client.get_chat(
+            project_id="project-1",
+            provider="chatgpt",
+            chat_id="chat-1",
+        ) == {
+            "id": "chat-1",
+            "provider": "chatgpt",
+            "title": "Test Chat",
+            "project_id": "project-1",
+            "metadata": {
+                "url": "https://chatgpt.com/c/chat-1",
+            },
+            "messages": [
+                {
+                    "number": 1,
+                    "role": "user",
+                    "content": "# Hello",
+                    "file_name": "001-user.md",
+                },
+                {
+                    "number": 2,
+                    "role": "assistant",
+                    "content": "Привет!",
+                    "file_name": "002-assistant.md",
+                },
+            ],
+        }
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
