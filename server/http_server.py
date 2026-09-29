@@ -118,6 +118,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                 "title": chat.title,
                 "project_id": chat.project_id,
                 "metadata": chat.metadata,
+                "messages": [
+                    {
+                        "number": message.number,
+                        "role": message.role,
+                        "content": message.content,
+                        "file_name": message.file_name,
+                    }
+                    for message in chat.messages
+                ],
             }
 
             response_body = json.dumps(

@@ -4,7 +4,7 @@ import threading
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from chat.models import Chat, Project
+from chat.models import Chat, Message, Project
 from chat.storage import (
     FileStorage,
     ProjectNotFoundError,
@@ -996,6 +996,283 @@ def test_list_chats_for_missing_project_returns_404(tmp_path):
             )
 
         assert exc_info.value.code == 404
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_get_chat_returns_messages(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="# Hello\n\nWorld",
+        ),
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=2,
+            role="assistant",
+            content="Привет!",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        with urlopen(
+            f"http://127.0.0.1:{server_port}"
+            "/projects/project-1/chats/chatgpt/chat-1"
+        ) as response:
+            assert response.status == 200
+
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        assert data["messages"] == [
+            {
+                "number": 1,
+                "role": "user",
+                "content": "# Hello\n\nWorld",
+                "file_name": "001-user.md",
+            },
+            {
+                "number": 2,
+                "role": "assistant",
+                "content": "Привет!",
+                "file_name": "002-assistant.md",
+            },
+        ]
+
+        assert "created_at" not in data["messages"][0]
+        assert "updated_at" not in data["messages"][0]
+        assert "metadata" not in data["messages"][0]
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_get_empty_chat_returns_empty_messages(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Empty Chat",
+            project_id="project-1",
+        )
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        with urlopen(
+            f"http://127.0.0.1:{server_port}"
+            "/projects/project-1/chats/chatgpt/chat-1"
+        ) as response:
+            assert response.status == 200
+
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        assert data["messages"] == []
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_create_chat_preserves_metadata(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        payload = {
+            "id": "chat-1",
+            "provider": "chatgpt",
+            "title": "Test Chat",
+            "metadata": {
+                "url": "https://chatgpt.com/c/chat-1",
+                "source": "manual",
+            },
+        }
+
+        request = Request(
+            f"http://127.0.0.1:{server_port}"
+            "/projects/project-1/chats",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        with urlopen(request) as response:
+            assert response.status == 201
+
+        chat = storage.load_chat(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+
+        assert chat.metadata == {
+            "url": "https://chatgpt.com/c/chat-1",
+            "source": "manual",
+        }
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_create_message_preserves_metadata(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        payload = {
+            "role": "user",
+            "content": "# Hello",
+            "metadata": {
+                "source": "manual-copy",
+                "format": "markdown",
+            },
+        }
+
+        request = Request(
+            f"http://127.0.0.1:{server_port}"
+            "/projects/project-1/chats/chatgpt/chat-1/messages",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        with urlopen(request) as response:
+            assert response.status == 201
+
+        chat = storage.load_chat(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+
+        assert chat.messages[0].metadata == {
+            "source": "manual-copy",
+            "format": "markdown",
+        }
 
     finally:
         server.shutdown()
