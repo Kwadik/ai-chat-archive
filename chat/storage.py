@@ -653,3 +653,35 @@ class FileStorage:
                     results.append(summary)
 
         return results
+
+    def search_messages(
+        self,
+        query: str,
+        *,
+        project_id: str | None = None,
+        chat_id: str | None = None,
+        role: str | None = None,
+    ) -> list[Message]:
+        query = query.lower()
+
+        if not query:
+            return []
+
+        results: list[Message] = []
+
+        for project in self.list_projects():
+            if project_id is not None and project.id != project_id:
+                continue
+
+            for chat in self.list_chats(project.id):
+                if chat_id is not None and chat.id != chat_id:
+                    continue
+
+                for message in chat.messages:
+                    if role is not None and message.role != role:
+                        continue
+
+                    if query in message.content.lower():
+                        results.append(message)
+
+        return results
