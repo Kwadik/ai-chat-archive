@@ -1,0 +1,10 @@
+<main>
+    <h1>{{ chat.title }}</h1>
+
+    {% for item in messages %}
+    <article>
+        <h2>{{ item.message.role }}</h2>
+        <div>{{ item.html | safe }}</div>
+    </article>
+    {% endfor %}
+</main>

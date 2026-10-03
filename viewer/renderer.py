@@ -76,18 +76,41 @@ def render_projects(projects: list[Project]) -> str:
 def render_chat(chat: Chat) -> str:
     template = _environment.get_template("chat.html")
 
-    messages = [
+    return template.render(
+        chat=chat,
+        messages=_render_messages(chat),
+    )
+
+def _load_static_asset(name: str) -> str:
+    path = Path(__file__).parent / "static" / name
+    return path.read_text(encoding="utf-8")
+
+def export_chat_html(chat: Chat) -> str:
+    template = _environment.get_template("standalone.html")
+
+    css = _load_static_asset("css/viewer.css")
+    js = _load_static_asset("js/viewer.js")
+
+    return template.render(
+        chat=chat,
+        messages=_render_messages(chat),
+        css=css,
+        js=js,
+    )
+
+def export_chat_html_file(chat: Chat, path: Path) -> Path:
+    html = export_chat_html(chat)
+    path.write_text(html, encoding="utf-8")
+    return path
+
+def _render_messages(chat: Chat) -> list[dict]:
+    return [
         {
             "message": message,
             "html": render_markdown(message.content),
         }
         for message in chat.messages
     ]
-
-    return template.render(
-        chat=chat,
-        messages=messages,
-    )
 
 def render_markdown(content: str) -> str:
     return _markdown.render(content)

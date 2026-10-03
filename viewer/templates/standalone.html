@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ chat.title }}</title>
 
-    <link
-            rel="stylesheet"
-            href="/static/css/viewer.css"
-    >
+    <style>
+        {{ css | safe }}
+    </style>
 </head>
 <body>
 
 {% include "chat_content.html" %}
 
-<script src="/static/js/viewer.js"></script>
+<script>
+    {{ js | safe }}
+</script>
 </body>
 </html>
