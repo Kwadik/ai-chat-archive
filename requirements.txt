@@ -2,3 +2,7 @@
 #
 # Web/viewer dependencies will be added when the local HTTP server
 # and Jinja2-based viewer are implemented.
+
+Jinja2
+markdown-it-py
+Pygments

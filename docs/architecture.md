@@ -106,6 +106,16 @@ Tables, lists, code blocks, headings, links and other Markdown structures remain
 
 The viewer renders Markdown but does not become the source of truth.
 
+Rendered HTML is a derived representation of Markdown.
+
+HTML must not be stored as the authoritative representation of a Message.
+
+The same Markdown source may be rendered for different presentation targets, including:
+
+* the local viewer;
+* standalone HTML export;
+* future other presentation formats.
+
 The application must not convert stored Markdown into HTML as the primary storage format.
 
 ---
@@ -355,22 +365,19 @@ They should not contain filesystem storage implementation.
 The intended architecture is:
 
 ```text
-Browser Extension
-       │
-       │ localhost HTTP
-       ▼
-Local Python Server
-       │
-       ├── API
-       ├── synchronization
-       ├── provider services
-       └── storage
-              │
-              ▼
-          filesystem
-              │
-              ├── JSON metadata
-              └── Markdown content
+Browser Extension ─────┐
+                       │
+                       ▼
+                 Local HTTP API
+                       │
+                       ▼
+                   FileStorage
+                       │
+                       ▼
+                   filesystem
+
+
+Local Viewer ──────────► stored data / viewer HTTP server
 ```
 
 The viewer is a separate consumer of the stored data.
@@ -460,9 +467,76 @@ The viewer does not own the data model.
 
 The viewer must not become the source of truth.
 
+## Markdown rendering
+
+Markdown rendering is an explicit presentation-layer responsibility.
+
+The Markdown renderer should support:
+
+* standard Markdown structures;
+* headings;
+* paragraphs;
+* lists;
+* links;
+* tables where supported;
+* fenced code blocks;
+* language information for code blocks.
+
+The renderer should be isolated from the viewer templates so that the same Markdown-to-HTML rendering logic can be reused by other presentation targets.
+
+The specific Markdown library is an implementation detail and should not leak into storage or domain models.
+
+## Code blocks
+
+Code blocks are rendered as structured HTML.
+
+Future presentation features may include:
+
+* syntax highlighting;
+* language-specific styling;
+* copying code block contents.
+
+These features must operate on the rendered representation and must not modify the stored Markdown.
+
+## Editing
+
+The initial viewer is read-oriented.
+
+Message editing is not part of the initial viewer implementation.
+
+A future browser extension may provide a Markdown editor before saving content through the local HTTP API.
+
+The viewer may reuse editor components in the future, but the editor is not currently part of the viewer architecture.
+
 ---
 
-# 15. Templates, CSS and JavaScript
+# 15. Standalone HTML Export
+
+The application should eventually support exporting a Chat as a standalone HTML file.
+
+The exported file must be viewable without:
+
+* the Python application;
+* the local HTTP server;
+* the archive filesystem;
+* the browser extension;
+* external runtime services.
+
+The preferred output is a single self-contained `.html` file.
+
+The standalone document should contain all required presentation assets locally, including CSS and JavaScript required for the exported functionality.
+
+The exported HTML is a derived representation of the stored Markdown.
+
+The Markdown files remain the source of truth and must not be replaced by exported HTML.
+
+Standalone export should reuse the same Markdown rendering layer as the local viewer where practical.
+
+The export format should remain independent from the local viewer's HTTP routes and filesystem layout.
+
+---
+
+# 16. Templates, CSS and JavaScript
 
 The UI should not be implemented as one large Python file containing HTML/CSS/JavaScript strings.
 
@@ -489,7 +563,7 @@ This is important because individual files should be easy to inspect, modify and
 
 ---
 
-# 16. Tests
+# 17. Tests
 
 Tests live in:
 
@@ -532,7 +606,7 @@ Tests are part of the architecture protection, not only final validation.
 
 ---
 
-# 17. Development Workflow
+# 18. Development Workflow
 
 Development follows a small-step test-driven workflow:
 
@@ -563,7 +637,7 @@ An `ERROR` result must also be investigated before proceeding.
 
 ---
 
-# 18. Local-First Principles
+# 19. Local-First Principles
 
 The project follows these principles:
 
@@ -580,7 +654,7 @@ The project follows these principles:
 
 ---
 
-# 19. Important Constraints
+# 20. Important Constraints
 
 The following constraints are architectural requirements.
 
@@ -612,7 +686,7 @@ Do not introduce a database, message queue, background worker, complex dependenc
 
 ---
 
-# 20. Current Project State
+# 21. Current Project State
 
 Implemented:
 
@@ -620,31 +694,48 @@ Implemented:
 Project model
 Chat model
 Message model
+ChatSummary model
 Filesystem storage
 JSON metadata
 Markdown message storage
 UTC timestamps
 Project loading/saving
 Chat loading/saving
+Chat listing
 Metadata filtering foundation
-Initial pytest suite
+Local HTTP API
+HTTP client
+Jinja2-based viewer
+Separate CSS
+Separate JavaScript
+Project listing page
+Project chat listing
+Chat viewing page
+```
+
+Partially implemented / currently under development:
+
+```text
+Markdown-to-HTML rendering
+Viewer presentation
+Code block rendering
 ```
 
 Not implemented yet:
 
 ```text
-Chat listing
-Improved search result model
+Standalone HTML export
+Syntax highlighting
+Copy buttons for code blocks
 Full-text search
+Search result model
 Provider implementations
 ChatGPT integration
 Synchronization logic
-Local HTTP API
-Jinja viewer
-Separated CSS
-Separated JavaScript
 Chrome Extension
+Extension Markdown editor
+Viewer message editing
 ```
 
-The next development steps should continue incrementally from the existing tested storage layer.
+The next development steps should continue incrementally from the existing tested storage, API and viewer layers.
 

@@ -1,0 +1,151 @@
+body {
+    font-family: sans-serif;
+}
+
+pre {
+    overflow-x: auto;
+    line-height: 125%;
+}
+
+.highlight .hll {
+    background-color: #ffffcc;
+}
+
+.k {
+    color: #008000;
+    font-weight: bold;
+}
+
+.o {
+    color: #666;
+}
+
+.c {
+    color: #3D7B7B;
+    font-style: italic;
+}
+
+.cm,
+.ch,
+.c1,
+.cs {
+    color: #3D7B7B;
+    font-style: italic;
+}
+
+.cp {
+    color: #9C6500;
+}
+
+.err {
+    border: 1px solid #F00;
+}
+
+.m,
+.mb,
+.mf,
+.mh,
+.mi,
+.mo,
+.il {
+    color: #666;
+}
+
+.s,
+.sa,
+.sb,
+.sc,
+.dl,
+.sh,
+.s1,
+.s2,
+.sx {
+    color: #BA2121;
+}
+
+.sd {
+    color: #BA2121;
+    font-style: italic;
+}
+
+.se {
+    color: #AA5D1F;
+    font-weight: bold;
+}
+
+.si {
+    color: #A45A77;
+    font-weight: bold;
+}
+
+.sr {
+    color: #A45A77;
+}
+
+.ss {
+    color: #19177C;
+}
+
+.nb,
+.bp {
+    color: #008000;
+}
+
+.nc {
+    color: #00F;
+    font-weight: bold;
+}
+
+.no {
+    color: #800;
+}
+
+.nd {
+    color: #A2F;
+}
+
+.nf,
+.fm {
+    color: #00F;
+}
+
+.ni {
+    color: #717171;
+    font-weight: bold;
+}
+
+.ne {
+    color: #CB3F38;
+    font-weight: bold;
+}
+
+.nl {
+    color: #767600;
+}
+
+.nn {
+    color: #00F;
+    font-weight: bold;
+}
+
+.nt {
+    color: #008000;
+    font-weight: bold;
+}
+
+.nv,
+.vc,
+.vg,
+.vi,
+.vm {
+    color: #19177C;
+}
+
+.ow {
+    color: #A2F;
+    font-weight: bold;
+}
+
+.w {
+    color: #BBB;
+}
