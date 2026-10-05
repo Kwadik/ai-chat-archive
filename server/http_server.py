@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs
 from typing import Any
 
 from chat.models import Chat, Message, Project
@@ -16,6 +17,75 @@ class RequestHandler(BaseHTTPRequestHandler):
     storage: FileStorage
 
     def do_GET(self) -> None:
+        if self.path.startswith("/search"):
+            query = ""
+
+            if "?" in self.path:
+                _, query_string = self.path.split("?", 1)
+                parameters = parse_qs(
+                    query_string,
+                    keep_blank_values=True,
+                )
+
+                query = parameters.get("q", [""])[0]
+                project_id = parameters.get("project_id", [None])[0]
+                chat_id = parameters.get(
+                    "chat_id",
+                    [None],
+                )[0]
+                role = parameters.get(
+                    "role",
+                    [None],
+                )[0]
+
+            messages = self.storage.search_messages(
+                query,
+                project_id=project_id,
+                chat_id=chat_id,
+                role=role,
+            )
+
+            response = [
+                {
+                    "project": {
+                        "id": result.project.id,
+                        "name": result.project.name,
+                    },
+                    "chat": {
+                        "id": result.chat.id,
+                        "provider": result.chat.provider,
+                        "title": result.chat.title,
+                        "project_id": result.chat.project_id,
+                    },
+                    "message": {
+                        "number": result.message.number,
+                        "role": result.message.role,
+                        "content": result.message.content,
+                        "file_name": result.message.file_name,
+                    },
+                    "provider": result.provider,
+                }
+                for result in messages
+            ]
+
+            response_body = json.dumps(
+                response,
+                ensure_ascii=False,
+            ).encode("utf-8")
+
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                "application/json",
+            )
+            self.send_header(
+                "Content-Length",
+                str(len(response_body)),
+            )
+            self.end_headers()
+            self.wfile.write(response_body)
+            return
+
         if self.path == "/projects":
             projects = self.storage.list_projects()
 

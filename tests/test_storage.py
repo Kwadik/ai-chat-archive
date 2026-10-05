@@ -3,7 +3,13 @@ import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from chat.models import Chat, ChatSummary, Message, Project
+from chat.models import (
+    Chat,
+    ChatSummary,
+    Message,
+    Project,
+    SearchResult
+)
 from chat.storage import (
     ChatNotFoundError,
     FileStorage,
@@ -1707,8 +1713,8 @@ def test_search_messages_finds_matching_messages(tmp_path):
     results = storage.search_messages("docker")
 
     assert len(results) == 2
-    assert results[0].content == "How do I use Docker?"
-    assert results[1].content == "You can use docker compose."
+    assert results[0].message.content == "How do I use Docker?"
+    assert results[1].message.content == "You can use docker compose."
 
 def test_search_messages_is_case_insensitive(tmp_path):
     from chat.models import Chat, Message, Project
@@ -1741,7 +1747,7 @@ def test_search_messages_is_case_insensitive(tmp_path):
     results = storage.search_messages("DOCKER")
 
     assert len(results) == 1
-    assert results[0].content == "How do I use Docker?"
+    assert results[0].message.content == "How do I use Docker?"
 
 def test_search_messages_with_empty_query_returns_no_results(tmp_path):
     from chat.models import Chat, Message, Project
@@ -1833,9 +1839,25 @@ def test_search_messages_searches_across_projects(tmp_path):
     results = storage.search_messages("docker")
 
     assert len(results) == 2
-    assert [message.content for message in results] == [
+
+    assert [result.message.content for result in results] == [
         "Docker in project one",
         "Docker in project two",
+    ]
+
+    assert [result.project.id for result in results] == [
+        "project-1",
+        "project-2",
+    ]
+
+    assert [result.chat.id for result in results] == [
+        "chat-1",
+        "chat-2",
+    ]
+
+    assert [result.provider for result in results] == [
+        "chatgpt",
+        "chatgpt",
     ]
 
 def test_search_messages_can_be_limited_to_project(tmp_path):
@@ -1893,7 +1915,7 @@ def test_search_messages_can_be_limited_to_project(tmp_path):
     )
 
     assert len(results) == 1
-    assert results[0].content == "Docker in project one"
+    assert results[0].message.content == "Docker in project one"
 
 def test_search_messages_with_unknown_project_returns_no_results(tmp_path):
     from chat.models import Chat, Message, Project
@@ -1980,7 +2002,7 @@ def test_search_messages_can_be_limited_to_chat(tmp_path):
     )
 
     assert len(results) == 1
-    assert results[0].content == "Docker in chat two"
+    assert results[0].message.content == "Docker in chat two"
 
 def test_search_messages_can_be_limited_to_chat_without_project(
     tmp_path,
@@ -2039,7 +2061,7 @@ def test_search_messages_can_be_limited_to_chat_without_project(
     )
 
     assert len(results) == 1
-    assert results[0].content == "Docker in chat two"
+    assert results[0].message.content == "Docker in chat two"
 
 def test_search_messages_can_be_limited_to_role(tmp_path):
     from chat.models import Chat, Message, Project
@@ -2081,8 +2103,8 @@ def test_search_messages_can_be_limited_to_role(tmp_path):
     )
 
     assert len(results) == 1
-    assert results[0].role == "assistant"
-    assert results[0].content == "Docker answer"
+    assert results[0].message.role == "assistant"
+    assert results[0].message.content == "Docker answer"
 
 def test_search_messages_combines_project_chat_and_role_filters(tmp_path):
     from chat.models import Chat, Message, Project
@@ -2140,8 +2162,8 @@ def test_search_messages_combines_project_chat_and_role_filters(tmp_path):
     )
 
     assert len(results) == 1
-    assert results[0].role == "assistant"
-    assert results[0].content == "Docker answer"
+    assert results[0].message.role == "assistant"
+    assert results[0].message.content == "Docker answer"
 
 def test_search_messages_returns_each_matching_message_once(tmp_path):
     from chat.models import Chat, Message, Project
@@ -2174,7 +2196,7 @@ def test_search_messages_returns_each_matching_message_once(tmp_path):
     results = storage.search_messages("docker")
 
     assert len(results) == 1
-    assert results[0].content == "Docker is useful. Docker is simple."
+    assert results[0].message.content == "Docker is useful. Docker is simple."
 
 def test_search_messages_preserves_storage_order(tmp_path):
     from chat.models import Chat, Message, Project
@@ -2216,4 +2238,360 @@ def test_search_messages_preserves_storage_order(tmp_path):
 
     results = storage.search_messages("docker")
 
-    assert [message.number for message in results] == [1, 2, 3]
+    assert [result.message.number for result in results] == [1, 2, 3]
+
+def test_search_messages_with_empty_query_can_use_project_filter(tmp_path):
+    from chat.models import Chat, Message, Project
+    from chat.storage import FileStorage
+
+    storage = FileStorage(tmp_path)
+
+    project_one = Project(
+        id="project-1",
+        name="Project One",
+    )
+
+    project_two = Project(
+        id="project-2",
+        name="Project Two",
+    )
+
+    chat_one = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Chat One",
+        project_id=project_one.id,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Message one",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Message two",
+            ),
+        ],
+    )
+
+    chat_two = Chat(
+        id="chat-2",
+        provider="chatgpt",
+        title="Chat Two",
+        project_id=project_two.id,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Other project",
+            ),
+        ],
+    )
+
+    storage.save_project(project_one)
+    storage.save_project(project_two)
+    storage.save_chat(chat_one)
+    storage.save_chat(chat_two)
+
+    results = storage.search_messages(
+        "",
+        project_id="project-1",
+    )
+
+    assert len(results) == 2
+    assert [result.message.content for result in results] == [
+        "Message one",
+        "Message two",
+    ]
+
+def test_search_messages_with_empty_query_can_use_chat_filter(tmp_path):
+    from chat.models import Chat, Message, Project
+    from chat.storage import FileStorage
+
+    storage = FileStorage(tmp_path)
+
+    project = Project(
+        id="project-1",
+        name="Project One",
+    )
+
+    chat_one = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Chat One",
+        project_id=project.id,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Message one",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Message two",
+            ),
+        ],
+    )
+
+    chat_two = Chat(
+        id="chat-2",
+        provider="chatgpt",
+        title="Chat Two",
+        project_id=project.id,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Other chat",
+            ),
+        ],
+    )
+
+    storage.save_project(project)
+    storage.save_chat(chat_one)
+    storage.save_chat(chat_two)
+
+    results = storage.search_messages(
+        "",
+        chat_id="chat-1",
+    )
+
+    assert len(results) == 2
+    assert [result.message.content for result in results] == [
+        "Message one",
+        "Message two",
+    ]
+
+def test_search_messages_with_empty_query_can_use_role_filter(tmp_path):
+    from chat.models import Chat, Message, Project
+    from chat.storage import FileStorage
+
+    storage = FileStorage(tmp_path)
+
+    project = Project(
+        id="project-1",
+        name="Project One",
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="My Chat",
+        project_id=project.id,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Question",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Answer",
+            ),
+            Message(
+                number=3,
+                role="user",
+                content="Another question",
+            ),
+        ],
+    )
+
+    storage.save_project(project)
+    storage.save_chat(chat)
+
+    results = storage.search_messages(
+        "",
+        role="assistant",
+    )
+
+    assert len(results) == 1
+    assert results[0].message.role == "assistant"
+    assert results[0].message.content == "Answer"
+
+def test_search_messages_with_empty_query_combines_project_and_role_filters(
+    tmp_path,
+):
+    from chat.models import Chat, Message, Project
+    from chat.storage import FileStorage
+
+    storage = FileStorage(tmp_path)
+
+    project_one = Project(
+        id="project-1",
+        name="Project One",
+    )
+
+    project_two = Project(
+        id="project-2",
+        name="Project Two",
+    )
+
+    chat_one = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Chat One",
+        project_id=project_one.id,
+        messages=[
+            Message(
+                number=1,
+                role="user",
+                content="Question one",
+            ),
+            Message(
+                number=2,
+                role="assistant",
+                content="Answer one",
+            ),
+        ],
+    )
+
+    chat_two = Chat(
+        id="chat-2",
+        provider="chatgpt",
+        title="Chat Two",
+        project_id=project_two.id,
+        messages=[
+            Message(
+                number=1,
+                role="assistant",
+                content="Answer two",
+            ),
+        ],
+    )
+
+    storage.save_project(project_one)
+    storage.save_project(project_two)
+    storage.save_chat(chat_one)
+    storage.save_chat(chat_two)
+
+    results = storage.search_messages(
+        "",
+        project_id="project-1",
+        role="assistant",
+    )
+
+    assert len(results) == 1
+    assert results[0].message.role == "assistant"
+    assert results[0].message.content == "Answer one"
+
+def test_search_messages_is_case_insensitive_for_unicode(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="assistant",
+            content="Python и РАЗРАБОТКА — важные темы.",
+        ),
+    )
+
+    result = storage.search_messages("разработка")
+
+    assert len(result) == 1
+    assert result[0].message.content == "Python и РАЗРАБОТКА — важные темы."
+
+def test_search_messages_searches_markdown_content(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="assistant",
+            content="## Python\n\n`search()` работает внутри Markdown.",
+        ),
+    )
+
+    result = storage.search_messages("search()")
+
+    assert len(result) == 1
+    assert result[0].message.content == (
+        "## Python\n\n`search()` работает внутри Markdown."
+    )
+
+def test_search_messages_returns_search_result(
+    tmp_path,
+):
+    storage = FileStorage(tmp_path / "projects")
+
+    project = Project(
+        id="project-1",
+        name="Project One",
+    )
+    storage.save_project(project)
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Chat One",
+        project_id="project-1",
+    )
+    storage.save_chat(chat)
+
+    message = Message(
+        number=1,
+        role="user",
+        content="Python is useful.",
+    )
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        message,
+    )
+
+    results = storage.search_messages("python")
+
+    assert len(results) == 1
+
+    result = results[0]
+
+    assert isinstance(result, SearchResult)
+    assert result.project is not None
+    assert result.chat is not None
+    assert result.message is not None
+    assert result.provider == "chatgpt"

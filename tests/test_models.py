@@ -1,6 +1,6 @@
 from datetime import timezone
 
-from chat.models import Chat, Message, Project
+from chat.models import Chat, Message, Project, SearchResult
 
 
 def test_message_defaults():
@@ -66,3 +66,34 @@ def test_message_custom_file_name():
     )
 
     assert message.file_name == "custom.md"
+
+def test_search_result_contains_project_chat_message_and_provider():
+    project = Project(
+        id="project-1",
+        name="Project One",
+    )
+
+    chat = Chat(
+        id="chat-1",
+        provider="chatgpt",
+        title="Chat One",
+        project_id="project-1",
+    )
+
+    message = Message(
+        number=1,
+        role="user",
+        content="Python is useful.",
+    )
+
+    result = SearchResult(
+        project=project,
+        chat=chat,
+        message=message,
+        provider="chatgpt",
+    )
+
+    assert result.project is project
+    assert result.chat is chat
+    assert result.message is message
+    assert result.provider == "chatgpt"

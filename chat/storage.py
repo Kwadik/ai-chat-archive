@@ -5,8 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .models import (
+from chat.models import (
     Chat,
+    SearchResult,
     ChatSummary,
     Message,
     Project,
@@ -664,10 +665,10 @@ class FileStorage:
     ) -> list[Message]:
         query = query.lower()
 
-        if not query:
+        if not query and project_id is None and chat_id is None and role is None:
             return []
 
-        results: list[Message] = []
+        results: list[SearchResult] = []
 
         for project in self.list_projects():
             if project_id is not None and project.id != project_id:
@@ -682,6 +683,13 @@ class FileStorage:
                         continue
 
                     if query in message.content.lower():
-                        results.append(message)
+                        results.append(
+                            SearchResult(
+                                project=project,
+                                chat=chat,
+                                message=message,
+                                provider=chat.provider,
+                            )
+                        )
 
         return results

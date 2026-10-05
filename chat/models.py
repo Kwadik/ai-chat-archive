@@ -107,3 +107,10 @@ class Project:
     def __post_init__(self) -> None:
         self.created_at = ensure_utc(self.created_at)
         self.updated_at = ensure_utc(self.updated_at)
+
+@dataclass
+class SearchResult:
+    project: Project
+    chat: Chat
+    message: Message
+    provider: str

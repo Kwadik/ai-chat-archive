@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode
+from chat.models import Chat, Message, Project, SearchResult
 
 
 class ApiClient:
@@ -150,3 +152,59 @@ class ApiClient:
             return json.loads(
                 response.read().decode("utf-8")
             )
+
+    def search(
+        self,
+        query: str,
+        *,
+        project_id: str | None = None,
+        chat_id: str | None = None,
+        role: str | None = None,
+    ) -> list[SearchResult]:
+        params = {
+            "q": query,
+        }
+
+        if project_id is not None:
+            params["project_id"] = project_id
+
+        if chat_id is not None:
+            params["chat_id"] = chat_id
+
+        if role is not None:
+            params["role"] = role
+
+        query_string = urlencode(params)
+
+        request = Request(
+            f"{self.base_url}/search?{query_string}",
+            method="GET",
+        )
+
+        with urlopen(request) as response:
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+            return [
+                SearchResult(
+                    project=Project(
+                        id=item["project"]["id"],
+                        name=item["project"]["name"],
+                    ),
+                    chat=Chat(
+                        id=item["chat"]["id"],
+                        provider=item["chat"]["provider"],
+                        title=item["chat"]["title"],
+                        project_id=item["chat"]["project_id"],
+                    ),
+                    message=Message(
+                        number=item["message"]["number"],
+                        role=item["message"]["role"],
+                        content=item["message"]["content"],
+                        file_name=item["message"]["file_name"],
+                    ),
+                    provider=item["provider"],
+                )
+                for item in data
+            ]

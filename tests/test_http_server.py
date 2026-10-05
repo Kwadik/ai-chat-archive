@@ -1278,3 +1278,442 @@ def test_create_message_preserves_metadata(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join()
+
+def test_get_search_returns_matching_messages(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="How do I use Python?",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        response = urlopen(
+            f"http://127.0.0.1:{server_port}/search?q=python"
+        )
+
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+        assert result == [
+            {
+                "project": {
+                    "id": "project-1",
+                    "name": "Test Project",
+                },
+                "chat": {
+                    "id": "chat-1",
+                    "provider": "chatgpt",
+                    "title": "Test Chat",
+                    "project_id": "project-1",
+                },
+                "message": {
+                    "number": 1,
+                    "role": "user",
+                    "content": "How do I use Python?",
+                    "file_name": "001-user.md",
+                },
+                "provider": "chatgpt",
+            }
+        ]
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_get_search_with_empty_query_returns_empty_list(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="Python",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        response = urlopen(
+            f"http://127.0.0.1:{server_port}/search?q="
+        )
+
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+        assert result == []
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_get_search_filters_by_project(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+    storage.save_project(
+        Project(
+            id="project-2",
+            name="Project Two",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+    storage.save_chat(
+        Chat(
+            id="chat-2",
+            provider="chatgpt",
+            title="Chat Two",
+            project_id="project-2",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="Python in project one",
+        ),
+    )
+
+    storage.save_message(
+        "project-2",
+        "chatgpt",
+        "chat-2",
+        Message(
+            number=1,
+            role="user",
+            content="Python in project two",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        response = urlopen(
+            f"http://127.0.0.1:{server_port}"
+            "/search?q=python&project_id=project-1"
+        )
+
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+        assert result == [
+            {
+                "project": {
+                    "id": "project-1",
+                    "name": "Project One",
+                },
+                "chat": {
+                    "id": "chat-1",
+                    "provider": "chatgpt",
+                    "title": "Chat One",
+                    "project_id": "project-1",
+                },
+                "message": {
+                    "number": 1,
+                    "role": "user",
+                    "content": "Python in project one",
+                    "file_name": "001-user.md",
+                },
+                "provider": "chatgpt",
+            }
+        ]
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_get_search_filters_by_chat(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-2",
+            provider="chatgpt",
+            title="Chat Two",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="Python in chat one",
+        ),
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-2",
+        Message(
+            number=1,
+            role="user",
+            content="Python in chat two",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        response = urlopen(
+            f"http://127.0.0.1:{server_port}"
+            "/search?q=python&chat_id=chat-1"
+        )
+
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+        assert result == [
+            {
+                "project": {
+                    "id": "project-1",
+                    "name": "Test Project",
+                },
+                "chat": {
+                    "id": "chat-1",
+                    "provider": "chatgpt",
+                    "title": "Chat One",
+                    "project_id": "project-1",
+                },
+                "message": {
+                    "number": 1,
+                    "role": "user",
+                    "content": "Python in chat one",
+                    "file_name": "001-user.md",
+                },
+                "provider": "chatgpt",
+            }
+        ]
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_get_search_filters_by_role(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="Python question",
+        ),
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=2,
+            role="assistant",
+            content="Python answer",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        response = urlopen(
+            f"http://127.0.0.1:{server_port}"
+            "/search?q=python&role=assistant"
+        )
+
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+        assert result == [
+            {
+                "project": {
+                    "id": "project-1",
+                    "name": "Test Project",
+                },
+                "chat": {
+                    "id": "chat-1",
+                    "provider": "chatgpt",
+                    "title": "Test Chat",
+                    "project_id": "project-1",
+                },
+                "message": {
+                    "number": 2,
+                    "role": "assistant",
+                    "content": "Python answer",
+                    "file_name": "002-assistant.md",
+                },
+                "provider": "chatgpt",
+            }
+        ]
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
