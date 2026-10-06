@@ -371,10 +371,8 @@ class FileStorage:
         """
         Save one message to an existing chat.
 
-        The chat must already exist.
-
-        The message number is assigned automatically as the
-        next number after the existing messages.
+        If a message with the same number already exists,
+        update it. Otherwise assign the next number.
         """
 
         chat = self.load_chat(
@@ -382,6 +380,13 @@ class FileStorage:
             provider,
             chat_id,
         )
+
+        for index, existing_message in enumerate(chat.messages):
+            if existing_message.number == message.number:
+                message.file_name = existing_message.file_name
+                chat.messages[index] = message
+                self.save_chat(chat)
+                return
 
         next_number = max(
             (

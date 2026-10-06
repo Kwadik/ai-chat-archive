@@ -2595,3 +2595,178 @@ def test_search_messages_returns_search_result(
     assert result.chat is not None
     assert result.message is not None
     assert result.provider == "chatgpt"
+
+def test_save_message_updates_existing_message(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="Original message",
+        ),
+    )
+
+    original = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    ).messages[0]
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="user",
+            content="Edited message",
+        ),
+    )
+
+    chat = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert len(chat.messages) == 1
+
+    message = chat.messages[0]
+
+    assert message.number == 1
+    assert message.role == "user"
+    assert message.content == "Edited message"
+    assert message.file_name == "001-user.md"
+    assert message.created_at == original.created_at
+    assert message.updated_at > original.updated_at
+
+def test_save_message_assigns_next_number_for_new_message(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="First message",
+        ),
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="assistant",
+            content="Second message",
+        ),
+    )
+
+    chat = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert len(chat.messages) == 2
+
+    assert chat.messages[0].number == 1
+    assert chat.messages[0].file_name == "001-user.md"
+
+    assert chat.messages[1].number == 2
+    assert chat.messages[1].file_name == "002-assistant.md"
+
+def test_save_message_keeps_file_name_when_role_changes(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Project One",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Chat One",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="Original message",
+        ),
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=1,
+            role="assistant",
+            content="Edited message",
+        ),
+    )
+
+    chat = storage.load_chat(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+    )
+
+    assert len(chat.messages) == 1
+
+    message = chat.messages[0]
+
+    assert message.number == 1
+    assert message.role == "assistant"
+    assert message.content == "Edited message"
+    assert message.file_name == "001-user.md"
