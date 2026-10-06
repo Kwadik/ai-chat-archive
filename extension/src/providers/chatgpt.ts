@@ -12,6 +12,10 @@ export const chatgptProvider: ProviderAdapter = {
         return getChatIdFromChatGPTUrl(url);
     },
 
+    getChatUrl(chatId: string): string {
+        return `https://chatgpt.com/c/${chatId}`;
+    },
+
     getChatTitle(document): string | null {
         const title = document.title.trim();
 

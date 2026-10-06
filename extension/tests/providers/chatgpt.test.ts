@@ -83,4 +83,10 @@ describe("chatgptProvider", () => {
 
         expect(chatgptProvider.getChatId(url)).toBe("abc123");
     });
+
+    it("builds ChatGPT chat URL", () => {
+        expect(
+            chatgptProvider.getChatUrl("abc123"),
+        ).toBe("https://chatgpt.com/c/abc123");
+    });
 });

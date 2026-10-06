@@ -9,5 +9,7 @@ export interface ProviderAdapter {
 
     getChatId(url: URL): string | null;
 
+    getChatUrl(chatId: string): string;
+
     getChatTitle(document: ProviderDocument): string | null;
 }
