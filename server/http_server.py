@@ -435,6 +435,116 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_error(404)
         return
 
+    def do_PUT(self) -> None:
+        prefix = "/projects/"
+        marker = "/chats/"
+
+        if self.path.startswith(prefix) and marker in self.path:
+            path = self.path[len(prefix):]
+            project_id, chat_path = path.split(marker, 1)
+
+            parts = chat_path.split("/", 3)
+
+            if (
+                len(parts) != 4
+                or parts[2] != "messages"
+            ):
+                self.send_error(404)
+                return
+
+            provider, chat_id, _, message_number = parts
+
+            try:
+                number = int(message_number)
+            except ValueError:
+                self.send_error(404)
+                return
+
+            try:
+                content_length = int(
+                    self.headers.get("Content-Length", "0")
+                )
+                body = self.rfile.read(content_length)
+                data: dict[str, Any] = json.loads(
+                    body.decode("utf-8")
+                )
+
+                chat = self.storage.load_chat(
+                    project_id,
+                    provider,
+                    chat_id,
+                )
+
+                existing_message = next(
+                    (
+                        message
+                        for message in chat.messages
+                        if message.number == number
+                    ),
+                    None,
+                )
+
+                if existing_message is None:
+                    self.send_error(404)
+                    return
+
+                message = Message(
+                    number=number,
+                    role=data["role"],
+                    content=data["content"],
+                    metadata=data.get(
+                        "metadata",
+                        existing_message.metadata,
+                    ),
+                    created_at=existing_message.created_at,
+                    file_name=existing_message.file_name,
+                )
+
+                self.storage.save_message(
+                    project_id,
+                    provider,
+                    chat_id,
+                    message,
+                )
+
+                response = {
+                    "number": message.number,
+                    "role": message.role,
+                    "file_name": message.file_name,
+                    "metadata": message.metadata,
+                }
+
+                response_body = json.dumps(
+                    response,
+                    ensure_ascii=False,
+                ).encode("utf-8")
+
+                self.send_response(200)
+                self.send_header(
+                    "Content-Type",
+                    "application/json",
+                )
+                self.send_header(
+                    "Content-Length",
+                    str(len(response_body)),
+                )
+                self.end_headers()
+                self.wfile.write(response_body)
+                return
+
+            except ChatNotFoundError:
+                self.send_error(404)
+                return
+            except (
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+            ):
+                self.send_error(400)
+                return
+
+        self.send_error(404)
+
     def log_message(
         self,
         format: str,

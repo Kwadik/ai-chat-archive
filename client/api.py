@@ -153,6 +153,52 @@ class ApiClient:
                 response.read().decode("utf-8")
             )
 
+    def update_message(
+        self,
+        project_id: str,
+        provider: str,
+        chat_id: str,
+        number: int,
+        *,
+        role: str,
+        content: str,
+        metadata: dict | None = None,
+    ) -> Message:
+        path = (
+            f"/projects/{project_id}/"
+            f"chats/{provider}/{chat_id}/messages/{number}"
+        )
+
+        data = {
+            "role": role,
+            "content": content,
+        }
+
+        if metadata is not None:
+            data["metadata"] = metadata
+
+        request = Request(
+            self.base_url + path,
+            data=json.dumps(data).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+            },
+            method="PUT",
+        )
+
+        with urlopen(request) as response:
+            response_data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        return Message(
+            number=response_data["number"],
+            role=response_data["role"],
+            content=content,
+            file_name=response_data["file_name"],
+            metadata=response_data["metadata"],
+        )
+
     def search(
         self,
         query: str,

@@ -434,6 +434,174 @@ def test_create_message_via_http(tmp_path):
         server.server_close()
         thread.join()
 
+def test_update_message_via_http(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="Original message",
+            metadata={
+                "source": "browser-extension",
+                "external_id": "msg-123",
+            },
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        request = Request(
+            "http://127.0.0.1:"
+            f"{server_port}/projects/project-1/"
+            "chats/chatgpt/chat-1/messages/1",
+            data=json.dumps(
+                {
+                    "role": "user",
+                    "content": "Edited message",
+                }
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+            },
+            method="PUT",
+        )
+
+        with urlopen(request) as response:
+            assert response.status == 200
+
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        assert data["metadata"] == {
+            "source": "browser-extension",
+            "external_id": "msg-123",
+        }
+        assert data["number"] == 1
+        assert data["role"] == "user"
+        assert data["file_name"] == "001-user.md"
+
+        chat = storage.load_chat(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+
+        assert len(chat.messages) == 1
+        assert chat.messages[0].number == 1
+        assert chat.messages[0].role == "user"
+        assert chat.messages[0].content == "Edited message"
+        assert chat.messages[0].file_name == "001-user.md"
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_update_missing_message_via_http(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="Original message",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        request = Request(
+            "http://127.0.0.1:"
+            f"{server_port}/projects/project-1/"
+            "chats/chatgpt/chat-1/messages/999",
+            data=json.dumps(
+                {
+                    "role": "user",
+                    "content": "Edited message",
+                }
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+            },
+            method="PUT",
+        )
+
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(request)
+
+        assert exc_info.value.code == 404
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
 def test_create_second_message_via_http(tmp_path):
     storage = FileStorage(tmp_path / "projects")
 

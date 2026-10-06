@@ -448,6 +448,245 @@ def test_create_message(tmp_path):
         server.server_close()
         thread.join()
 
+def test_update_message(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="Original message",
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        client = ApiClient(
+            f"http://127.0.0.1:{server_port}"
+        )
+
+        message = client.update_message(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+            1,
+            role="user",
+            content="Edited message",
+        )
+
+        assert message.number == 1
+        assert message.role == "user"
+        assert message.content == "Edited message"
+        assert message.file_name == "001-user.md"
+
+        chat = storage.load_chat(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+
+        assert len(chat.messages) == 1
+        assert chat.messages[0].content == "Edited message"
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_update_message_preserves_metadata(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="Original message",
+            metadata={
+                "source": "browser-extension",
+                "external_id": "msg-123",
+            },
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        client = ApiClient(
+            f"http://127.0.0.1:{server_port}"
+        )
+
+        message = client.update_message(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+            1,
+            role="user",
+            content="Edited message",
+        )
+
+        assert message.number == 1
+        assert message.role == "user"
+        assert message.content == "Edited message"
+        assert message.file_name == "001-user.md"
+        assert message.metadata == {
+            "source": "browser-extension",
+            "external_id": "msg-123",
+        }
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+def test_update_message_replaces_metadata(tmp_path):
+    storage = FileStorage(tmp_path / "projects")
+
+    storage.save_project(
+        Project(
+            id="project-1",
+            name="Test Project",
+        )
+    )
+
+    storage.save_chat(
+        Chat(
+            id="chat-1",
+            provider="chatgpt",
+            title="Test Chat",
+            project_id="project-1",
+        )
+    )
+
+    storage.save_message(
+        "project-1",
+        "chatgpt",
+        "chat-1",
+        Message(
+            number=0,
+            role="user",
+            content="Original message",
+            metadata={
+                "source": "old",
+            },
+        ),
+    )
+
+    server = create_server(
+        storage,
+        host="127.0.0.1",
+        port=0,
+    )
+
+    thread = threading.Thread(
+        target=server.serve_forever,
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        server_port = server.server_address[1]
+
+        client = ApiClient(
+            f"http://127.0.0.1:{server_port}"
+        )
+
+        message = client.update_message(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+            1,
+            role="user",
+            content="Edited message",
+            metadata={
+                "source": "new",
+                "external_id": "msg-456",
+            },
+        )
+
+        assert message.metadata == {
+            "source": "new",
+            "external_id": "msg-456",
+        }
+
+        chat = storage.load_chat(
+            "project-1",
+            "chatgpt",
+            "chat-1",
+        )
+
+        assert chat.messages[0].metadata == {
+            "source": "new",
+            "external_id": "msg-456",
+        }
+
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
 def test_full_chat_workflow(tmp_path):
     storage = FileStorage(tmp_path / "projects")
     server = create_server(
