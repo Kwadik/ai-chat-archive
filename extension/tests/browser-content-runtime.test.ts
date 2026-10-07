@@ -3,6 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { runBrowserContentScript } from "../src/browser-content-runtime";
+import type { ExtensionApiClient } from "../src/api-client";
 
 describe("runBrowserContentScript", () => {
     it("uses the browser window location and document", () => {
@@ -128,6 +129,56 @@ describe("runBrowserContentScript", () => {
                 title: "Test chat",
             },
         );
+
+        vi.unstubAllGlobals();
+    });
+
+    it("saves edited Markdown through the API client", async () => {
+        vi.stubGlobal("window", {
+            location: {
+                href: "https://chatgpt.com/c/chat-123",
+            },
+        });
+
+        document.title = "Test chat";
+
+        const apiClient = {
+            createMessage: vi.fn().mockResolvedValue({
+                number: 1,
+                role: "user",
+                file_name: "001-user.md",
+            }),
+        } as unknown as ExtensionApiClient;
+
+        const onSave = vi.fn();
+
+        const ui = runBrowserContentScript(
+            onSave,
+            () => {},
+            apiClient,
+        );
+
+        expect(ui).not.toBeNull();
+
+        ui!.openEditor("Original Markdown");
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const saveButton = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-save]",
+        ) as HTMLButtonElement;
+
+        saveButton.click();
+
+        expect(apiClient.createMessage).toHaveBeenCalledWith({
+            projectId: "default",
+            provider: "chatgpt",
+            chatId: "chat-123",
+            role: "user",
+            content: "Original Markdown",
+        });
 
         vi.unstubAllGlobals();
     });

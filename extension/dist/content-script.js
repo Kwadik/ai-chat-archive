@@ -229,10 +229,21 @@
     );
   }
 
+  // src/save-message.ts
+  async function saveMessage(apiClient, context, markdown, projectId) {
+    return apiClient.createMessage({
+      projectId,
+      provider: context.provider,
+      chatId: context.chatId,
+      role: "user",
+      content: markdown
+    });
+  }
+
   // src/browser-content-runtime.ts
   function runBrowserContentScript(onSave = () => {
   }, onCancel = () => {
-  }) {
+  }, apiClient) {
     return runContentScript(
       {
         location: {
@@ -240,7 +251,17 @@
         }
       },
       document,
-      onSave,
+      (markdown, context) => {
+        if (apiClient) {
+          void saveMessage(
+            apiClient,
+            context,
+            markdown,
+            "default"
+          );
+        }
+        onSave(markdown, context);
+      },
       onCancel,
       navigator.clipboard ?? null
     );
