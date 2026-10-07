@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, expect, it, vi } from "vitest";
 import { runBrowserContentScript } from "../src/browser-content-runtime";
 
@@ -9,15 +12,36 @@ describe("runBrowserContentScript", () => {
             },
         });
 
-        vi.stubGlobal("document", {
-            title: "Python discussion",
-        });
+        document.title = "Python discussion";
 
         const result = runBrowserContentScript();
 
-        expect(result?.provider).toBe("chatgpt");
-        expect(result?.chatId).toBe("abc123");
-        expect(result?.title).toBe("Python discussion");
+        expect(result.context).toEqual({
+            provider: "chatgpt",
+            chatId: "abc123",
+            title: "Python discussion",
+        });
+
+        vi.unstubAllGlobals();
+    });
+
+    it("creates the extension UI for the current browser chat", () => {
+        vi.stubGlobal("window", {
+            location: {
+                href: "https://chatgpt.com/c/chat-123",
+            },
+        });
+
+        document.title = "Test chat";
+
+        const ui = runBrowserContentScript();
+
+        expect(ui).toBeDefined();
+        expect(ui.context).toEqual({
+            provider: "chatgpt",
+            chatId: "chat-123",
+            title: "Test chat",
+        });
 
         vi.unstubAllGlobals();
     });

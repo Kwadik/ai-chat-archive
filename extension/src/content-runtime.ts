@@ -1,17 +1,21 @@
-import { initializeContentScript } from "./content-entry";
+import { initializeContentUI } from "./content-ui-runtime";
 
 interface RuntimeContext {
     location: {
         href: string;
     };
-    document: {
-        title: string;
-    };
 }
 
-export function runContentScript(runtime: RuntimeContext) {
-    return initializeContentScript(
+export function runContentScript(
+    runtime: RuntimeContext,
+    document: Document,
+    onSave: (markdown: string) => void,
+    onCancel: () => void,
+) {
+    return initializeContentUI(
+        document,
         new URL(runtime.location.href),
-        runtime.document,
+        onSave,
+        onCancel,
     );
 }

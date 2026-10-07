@@ -1,12 +1,14 @@
 import { runContentScript } from "./content-runtime";
 
 export function runBrowserContentScript() {
-    return runContentScript({
-        location: {
-            href: window.location.href,
+    return runContentScript(
+        {
+            location: {
+                href: window.location.href,
+            },
         },
-        document: {
-            title: document.title,
-        },
-    });
+        document,
+        () => {},
+        () => {},
+    );
 }

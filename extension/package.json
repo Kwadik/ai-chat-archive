@@ -3,9 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "esbuild src/content-script.ts --bundle --outfile=dist/content-script.js --platform=browser --format=iife"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
+    "esbuild": "^0.28.2",
+    "jsdom": "^29.1.1",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
   }
