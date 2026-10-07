@@ -2,23 +2,27 @@
 
 ## 1. Purpose
 
-AI Chat Archive is a local-first application for storing and viewing conversations with AI providers.
+AI Chat Archive is a local-first application for storing, searching and viewing conversations with AI providers.
 
-The initial target provider is ChatGPT. The architecture is intentionally provider-independent so that Claude, Gemini, and other providers can be added later.
+The initial provider is ChatGPT. The architecture is provider-independent so that additional providers can be added later.
 
 The primary goals are:
 
 * store conversations locally;
-* preserve message content as original Markdown;
+* preserve message content as Markdown;
 * keep filesystem data human-readable;
 * make the archive Git-friendly;
-* allow searching and filtering by metadata;
-* separate provider-specific logic from storage and UI;
-* support future browser-extension integration through a local HTTP API;
+* support metadata and full-text search;
+* separate provider-specific logic from storage and presentation;
+* provide a local HTTP API for browser-extension integration;
+* provide a read-oriented local viewer;
+* support standalone offline HTML export;
 * keep source files small and logically cohesive;
 * make the project convenient to develop with AI assistance.
 
 The filesystem is the source of truth.
+
+The project intentionally avoids a database, background worker, complex synchronization infrastructure and other infrastructure that is not currently required.
 
 ---
 
@@ -34,9 +38,9 @@ Project
 
 ## Project
 
-A Project groups related chats and project-level files.
+A Project groups related chats and project-level configuration.
 
-Current fields:
+Current fields include:
 
 * `id`
 * `name`
@@ -45,11 +49,13 @@ Current fields:
 * `created_at`
 * `updated_at`
 
+Projects are stored under the archive root.
+
 ## Chat
 
 A Chat represents one conversation with one AI provider.
 
-Current fields:
+Current fields include:
 
 * `id`
 * `provider`
@@ -60,11 +66,19 @@ Current fields:
 * `messages`
 * `metadata`
 
+A Chat is addressed by:
+
+```text
+project_id + provider + chat_id
+```
+
+The provider is part of the filesystem path and API addressing because different providers may use different identifier spaces.
+
 ## Message
 
-A Message represents one logical user or assistant message.
+A Message represents one logical user, assistant or other supported message.
 
-Current fields:
+Current fields include:
 
 * `number`
 * `role`
@@ -74,9 +88,22 @@ Current fields:
 * `updated_at`
 * `metadata`
 
+A Message does not require an artificial globally unique ID.
+
+Its natural address is:
+
+```text
+project_id
+  + provider
+  + chat_id
+  + message.number
+```
+
+This corresponds directly to the filesystem representation.
+
 One logical Message is stored in exactly one Markdown file.
 
-A single AI response must not be artificially split into multiple Message files.
+A single AI response must not be artificially split into multiple Message files merely because it contains several Markdown structures.
 
 ---
 
@@ -84,9 +111,9 @@ A single AI response must not be artificially split into multiple Message files.
 
 Markdown is the primary representation of message content.
 
-The archive must preserve the Markdown received from the provider as closely as possible.
+The archive preserves the Markdown received or prepared by the user as closely as possible.
 
-Examples:
+Examples include:
 
 ````markdown
 # Heading
@@ -110,11 +137,11 @@ Rendered HTML is a derived representation of Markdown.
 
 HTML must not be stored as the authoritative representation of a Message.
 
-The same Markdown source may be rendered for different presentation targets, including:
+The same Markdown source can be rendered for different presentation targets, including:
 
 * the local viewer;
 * standalone HTML export;
-* future other presentation formats.
+* future presentation formats.
 
 The application must not convert stored Markdown into HTML as the primary storage format.
 
@@ -129,15 +156,11 @@ projects/
 └── <project-id>/
     ├── project.json
     └── chats/
-        ├── chatgpt/
-        │   └── <chat-id>/
-        │       ├── chat.json
-        │       ├── 001-user.md
-        │       ├── 002-assistant.md
-        │       └── ...
-        └── claude/
+        └── <provider>/
             └── <chat-id>/
                 ├── chat.json
+                ├── 001-user.md
+                ├── 002-assistant.md
                 └── ...
 ````
 
@@ -145,11 +168,11 @@ projects/
 
 `project.json` contains Project metadata.
 
-It does not contain the complete chat contents.
+It does not contain complete chat contents.
 
 ## Chat metadata
 
-`chat.json` contains:
+`chat.json` contains Chat metadata, including:
 
 * chat identity;
 * provider;
@@ -157,9 +180,9 @@ It does not contain the complete chat contents.
 * project ID;
 * timestamps;
 * chat metadata;
-* message metadata/index.
+* message metadata/index information.
 
-It does not contain the actual Markdown message contents.
+The actual Markdown message content remains in individual Markdown files.
 
 ## Message content
 
@@ -174,7 +197,13 @@ Example:
 004-assistant.md
 ```
 
-This keeps individual files small, readable and Git-friendly.
+Message filenames are generated when a new Message is added.
+
+The filename is retained when an existing Message is updated, even if its role changes.
+
+The storage layer does not renumber existing messages or recalculate their filenames.
+
+This keeps individual files readable and makes changes Git-friendly.
 
 ---
 
@@ -187,13 +216,13 @@ All timestamps are:
 * represented as `datetime` objects inside the domain model;
 * serialized as ISO 8601 strings in JSON.
 
-## created_at
+## `created_at`
 
 `created_at` represents when the entity was originally created.
 
-It must remain unchanged when an existing entity is updated.
+It remains unchanged when an existing entity is updated.
 
-## updated_at
+## `updated_at`
 
 `updated_at` represents the most recent modification.
 
@@ -209,9 +238,9 @@ For a Chat:
 
 ---
 
-# 6. Current Storage Implementation
+# 6. Storage Implementation
 
-The current filesystem storage is implemented in:
+The filesystem storage is implemented in:
 
 ```text
 chat/storage.py
@@ -223,16 +252,24 @@ The main class is:
 FileStorage
 ```
 
-Current responsibilities:
+Current responsibilities include:
 
 * save Project;
 * load Project;
 * list Projects;
 * save Chat;
 * load Chat;
-* search Chat metadata.
+* list Chats;
+* save Message;
+* search Chat metadata;
+* search Message content;
+* filter search by project;
+* filter search by chat;
+* filter search by role.
 
-Current exceptions:
+The storage layer operates directly on the filesystem.
+
+Current exceptions include:
 
 ```python
 ProjectNotFoundError
@@ -243,191 +280,365 @@ Saving a Chat requires the Project to already exist.
 
 `save_chat()` must not silently create a missing Project.
 
+Messages are added or updated through the Chat storage model.
+
 ---
 
-# 7. Message Update Semantics
+# 7. Message Identity and Update Semantics
 
-When saving an existing Chat:
+A Message is naturally addressed by:
+
+```text
+project_id
+provider
+chat_id
+message.number
+```
+
+This deliberately avoids introducing an artificial `Message.id`.
+
+## Creating a Message
+
+When a new Message is added to a Chat:
+
+1. the next message number is calculated;
+2. a filename is generated from the number and role;
+3. the Message is added to the Chat;
+4. the Chat metadata is persisted;
+5. the Markdown file is written.
+
+Example:
+
+```text
+001-user.md
+002-assistant.md
+003-user.md
+```
+
+## Updating a Message
+
+When a Message with an existing number is saved:
 
 ```text
 existing Message
        │
-       ├── same content/metadata
-       │       └── preserve created_at and updated_at
+       ├── unchanged
+       │      └── preserve created_at and updated_at
        │
-       └── changed content/metadata
-               ├── preserve created_at
-               └── update updated_at
+       └── changed
+              ├── preserve created_at
+              └── update updated_at
 ```
 
-The Markdown file is updated in place.
+The existing Markdown filename is preserved.
 
-Updating a Message must not create duplicate Markdown files.
+Updating a Message must not create a duplicate Markdown file.
 
-Existing orphan Markdown files are currently not automatically deleted.
+Existing orphan Markdown files are not automatically deleted.
 
-Explicit reconciliation/deletion can be added later.
+Explicit reconciliation and deletion can be added later if a concrete requirement appears.
 
 ---
 
-# 8. Metadata and Search
+# 8. Metadata
 
-Message metadata exists separately from Markdown content.
+Message and Chat metadata are stored separately from Markdown content.
 
-The purpose of metadata is to support:
+Metadata can contain information such as:
 
-* date filtering;
-* project filtering;
-* provider filtering;
-* chat filtering;
-* role filtering;
-* future tags;
-* future content types;
+* source information;
 * provider-specific identifiers;
-* future attachments;
-* future language information.
+* content type;
+* tags;
+* language;
+* attachment information;
+* future provider-specific attributes.
 
-The current storage layer can scan JSON metadata without using Markdown as the filtering criterion.
+Metadata is intended for structured filtering and integration.
 
-Full-text search is a separate future concern.
-
-Possible future implementations include:
-
-* SQLite index;
-* SQLite FTS;
-* another local search index.
-
-The storage model should not need to change when full-text search is introduced.
+The storage model does not depend on metadata being embedded into Markdown.
 
 ---
 
-# 9. Search Results
+# 9. Search
 
-Search should conceptually return references to source data rather than create independent copies of conversations.
+Search is implemented at the storage/API layer.
 
-A search result should be able to identify:
+The primary use case is finding something in a large archive after a long period of time.
+
+The viewer is intentionally read-oriented and does not currently provide its own search UI.
+
+## Message full-text search
+
+`FileStorage.search_messages()` searches message Markdown content.
+
+It supports optional filters:
+
+* `project_id`;
+* `chat_id`;
+* `role`.
+
+Provider is not currently exposed as a search filter.
+
+Provider remains part of the search result context because it identifies the Chat and is useful to clients such as the browser extension.
+
+Search is case-insensitive.
+
+The search layer scans the filesystem-backed archive rather than maintaining a separate search index.
+
+A database or dedicated search index may be introduced later if archive size or performance creates a concrete requirement.
+
+The storage model should remain independent of such an optimization.
+
+---
+
+# 10. Search Results
+
+Search results are represented by:
+
+```python
+SearchResult
+```
+
+A search result contains references to the original domain objects:
 
 ```text
 Project
-  → Provider
-      → Chat
-          → Message
+  → Chat
+      → Message
 ```
 
-The exact search-result model can be introduced later.
-
----
-
-# 10. Providers
-
-Provider-specific logic is isolated behind services.
+and also exposes the provider associated with the Chat.
 
 Conceptually:
 
-```text
-AIService
-  ├── ChatGPTService
-  ├── ClaudeService
-  └── GeminiService
-```
-
-Base interface:
-
 ```python
-class AIService(ABC):
-    name = "unknown"
-
-    @abstractmethod
-    def can_handle(self, url: str) -> bool:
-        ...
-
-    @abstractmethod
-    def get_chat_id(self, url: str) -> str:
-        ...
-
-    @abstractmethod
-    def get_chat_title(self) -> str:
-        ...
-
-    @abstractmethod
-    def get_messages(self) -> list[Any]:
-        ...
+SearchResult(
+    project=project,
+    chat=chat,
+    message=message,
+    provider=chat.provider,
+)
 ```
 
-Provider services are responsible for understanding provider-specific pages/data.
+Search results do not create independent copies of conversation data.
 
-They should not contain filesystem storage implementation.
+The filesystem-backed domain objects remain authoritative.
 
 ---
 
-# 11. Application Layers
+# 11. Providers
 
-The intended architecture is:
+Provider-specific browser logic is isolated from storage and the core domain model.
+
+The browser-extension provider abstraction is intentionally small.
+
+The current provider adapter contract is conceptually:
+
+```typescript
+interface ProviderAdapter {
+    provider: string;
+
+    canHandle(url: URL): boolean;
+
+    getChatId(url: URL): string | null;
+
+    getChatTitle(document: ProviderDocument): string | null;
+
+    getChatUrl(chatId: string): string;
+}
+```
+
+The current implementation includes ChatGPT.
+
+The ChatGPT adapter is responsible for:
+
+* recognizing `chatgpt.com`;
+* extracting a ChatGPT chat ID from `/c/<chat-id>`;
+* reading the current page title;
+* constructing the original ChatGPT chat URL.
+
+Provider adapters do not implement filesystem storage.
+
+Provider adapters also do not currently scrape or import complete conversations.
+
+The current product workflow is intentionally manual:
 
 ```text
-Browser Extension ─────┐
-                       │
-                       ▼
-                 Local HTTP API
-                       │
-                       ▼
-                   FileStorage
-                       │
-                       ▼
-                   filesystem
-
-
-Local Viewer ──────────► stored data / viewer HTTP server
+Provider UI
+    │
+    │ user uses provider's Copy Markdown
+    ▼
+Clipboard
+    │
+    ▼
+Extension editor
+    │
+    │ user cleans/edits Markdown
+    ▼
+Local HTTP API
 ```
 
-The viewer is a separate consumer of the stored data.
+This avoids depending on unstable provider DOM structures and keeps the initial extension focused on manual curation.
+
+Additional providers can implement the same adapter contract later.
 
 ---
 
-# 12. Future Local HTTP API
+# 12. Application Layers
 
-The future API is expected to expose operations conceptually similar to:
+The current architecture is:
 
 ```text
-GET  /api/projects
-POST /api/projects
-
-GET  /api/chats/<provider>/<chat_id>
-POST /api/chats/<provider>/<chat_id>/sync
-
-PUT  /api/chats/<provider>/<chat_id>/title
-
-POST /api/chats/<provider>/<chat_id>/messages
-
-GET  /api/search?...
+Browser Extension
+       │
+       ▼
+Local HTTP API
+       │
+       ▼
+   FileStorage
+       │
+       ▼
+   filesystem
 ```
 
-The exact API is not implemented yet.
+The local viewer is a separate read-oriented consumer:
 
-The API must operate on the filesystem storage layer rather than introducing a second source of truth.
+```text
+filesystem
+    │
+    ▼
+Viewer HTTP server
+    │
+    ▼
+browser
+```
+
+Standalone HTML export is another derived presentation path:
+
+```text
+filesystem
+    │
+    ▼
+Markdown rendering
+    │
+    ▼
+standalone HTML
+```
+
+The filesystem remains the common source of truth.
 
 ---
 
-# 13. Chrome Extension
+# 13. Local HTTP API
 
-The future Chrome Extension will provide a convenient way to save information from AI websites.
+A local HTTP API is implemented using Python's standard HTTP server infrastructure.
 
-Expected capabilities:
+The API operates on `FileStorage`.
 
-* floating save button/panel;
-* save user message;
-* save assistant message;
-* save both;
-* determine provider;
-* determine chat ID;
-* determine chat title;
-* select Project;
-* send Markdown to the local Python server;
-* optionally synchronize a complete chat;
-* project/settings management;
-* potentially automatic saving.
+It does not introduce another source of truth.
 
-The extension must not write directly to the archive filesystem.
+Current operations include:
+
+```text
+GET  /projects
+```
+
+Lists projects.
+
+```text
+POST /projects
+```
+
+Creates a project.
+
+Chat operations use:
+
+```text
+/projects/<project-id>/chats/<provider>/<chat-id>
+```
+
+Message creation:
+
+```text
+POST /projects/<project-id>/chats/<provider>/<chat-id>/messages
+```
+
+Message update:
+
+```text
+PUT /projects/<project-id>/chats/<provider>/<chat-id>/messages/<number>
+```
+
+Search:
+
+```text
+GET /search
+```
+
+The search API exposes the storage-layer message search functionality.
+
+The exact HTTP API is intentionally thin.
+
+Business and persistence behavior belongs in the application/storage layers rather than being duplicated in HTTP handlers.
+
+---
+
+# 14. Python API Client
+
+The Python-side API client provides programmatic access to the local HTTP API.
+
+The browser extension has its own TypeScript API client because it runs in the browser environment.
+
+The Python and TypeScript clients communicate with the same local HTTP API.
+
+This keeps the HTTP protocol independent from either client implementation.
+
+---
+
+# 15. Chrome Extension
+
+The browser extension lives in:
+
+```text
+extension/
+```
+
+It is a separate TypeScript subproject inside the same repository.
+
+The extension is currently focused on manual capture and navigation rather than automatic full-conversation scraping.
+
+The current workflow is:
+
+```text
+1. User opens an AI provider chat.
+2. Extension determines provider and chat context.
+3. User uses the provider's own Copy Markdown action.
+4. Extension reads the clipboard when available.
+5. Extension opens a Markdown editor.
+6. User cleans or edits the Markdown.
+7. User explicitly saves.
+8. Extension sends the Markdown through the local HTTP API.
+```
+
+If browser clipboard access is unavailable, the editor can still be opened and Markdown can be entered or pasted manually.
+
+## Extension responsibilities
+
+The extension currently handles:
+
+* provider detection;
+* chat ID detection;
+* chat title detection;
+* original provider chat URL generation;
+* clipboard access;
+* Markdown editing;
+* extension UI;
+* selected project configuration;
+* browser storage;
+* communication with the local HTTP API.
+
+The extension does not write directly to the archive filesystem.
 
 Instead:
 
@@ -449,72 +660,144 @@ filesystem
 
 ---
 
-# 14. Viewer
+# 16. Extension UI Isolation
 
-The viewer is a presentation layer.
+Extension UI is isolated from the provider page using Shadow DOM.
 
-It must:
+The extension creates its own root and panel rather than injecting application styles directly into the provider page.
 
-* read stored Markdown;
-* render Markdown;
-* display conversations;
-* provide navigation;
-* provide table of contents where appropriate;
-* support dark/light presentation as implemented;
-* avoid modifying the source archive.
+The extension UI currently contains:
 
-The viewer does not own the data model.
+* extension root;
+* panel;
+* Markdown editor;
+* Save action;
+* Cancel action;
+* clipboard-based editor opening.
 
-The viewer must not become the source of truth.
+Provider logic and application logic remain separate from the UI implementation.
 
-## Markdown rendering
+The Shadow DOM is an isolation mechanism for the extension UI; it is not part of the storage or domain architecture.
+
+---
+
+# 17. Extension Project Configuration
+
+The extension stores the selected Project ID in browser extension storage.
+
+The current storage mechanism is:
+
+```text
+chrome.storage.local
+```
+
+The selected project defaults to:
+
+```text
+default
+```
+
+Conceptually:
+
+```text
+Extension
+   │
+   ▼
+chrome.storage.local
+   │
+   └── selectedProjectId
+```
+
+The archive itself remains filesystem-backed.
+
+Browser storage only contains extension configuration and does not contain archived conversation content.
+
+The manifest requests the required Chrome permission:
+
+```json
+"permissions": [
+    "storage"
+]
+```
+
+---
+
+# 18. Viewer
+
+The viewer is a read-oriented presentation layer.
+
+It:
+
+* reads stored data;
+* renders Markdown;
+* displays projects;
+* displays chats;
+* displays conversations;
+* provides navigation;
+* supports table-of-contents presentation where appropriate;
+* provides presentation controls;
+* does not own the data model;
+* does not become the source of truth.
+
+The viewer currently does not implement message editing.
+
+The viewer also intentionally does not implement full-text search.
+
+Search is available through the storage/API layer and is intended to become primarily useful to future clients such as the browser extension.
+
+---
+
+# 19. Markdown Rendering
 
 Markdown rendering is an explicit presentation-layer responsibility.
 
-The Markdown renderer should support:
+The current implementation uses a Markdown rendering library in the viewer layer.
 
-* standard Markdown structures;
+The renderer supports the Markdown structures required by the archive, including:
+
 * headings;
 * paragraphs;
 * lists;
 * links;
-* tables where supported;
+* tables;
 * fenced code blocks;
 * language information for code blocks.
 
-The renderer should be isolated from the viewer templates so that the same Markdown-to-HTML rendering logic can be reused by other presentation targets.
+The specific Markdown library is an implementation detail.
 
-The specific Markdown library is an implementation detail and should not leak into storage or domain models.
+It must not leak into:
 
-## Code blocks
+* domain models;
+* storage;
+* API data models.
 
-Code blocks are rendered as structured HTML.
-
-Future presentation features may include:
-
-* syntax highlighting;
-* language-specific styling;
-* copying code block contents.
-
-These features must operate on the rendered representation and must not modify the stored Markdown.
-
-## Editing
-
-The initial viewer is read-oriented.
-
-Message editing is not part of the initial viewer implementation.
-
-A future browser extension may provide a Markdown editor before saving content through the local HTTP API.
-
-The viewer may reuse editor components in the future, but the editor is not currently part of the viewer architecture.
+The Markdown source remains unchanged during rendering.
 
 ---
 
-# 15. Standalone HTML Export
+# 20. Code Blocks
 
-The application should eventually support exporting a Chat as a standalone HTML file.
+Code blocks are rendered as structured HTML.
 
-The exported file must be viewable without:
+The current viewer supports syntax highlighting using Pygments.
+
+The viewer also provides client-side functionality for copying code block contents.
+
+These features operate on the rendered representation.
+
+They must not modify the stored Markdown.
+
+The Markdown file remains the source of truth.
+
+---
+
+# 21. Standalone HTML Export
+
+Standalone HTML export is implemented.
+
+The purpose is to produce a completely offline representation of stored content.
+
+The exported file does not require:
 
 * the Python application;
 * the local HTTP server;
@@ -524,143 +807,155 @@ The exported file must be viewable without:
 
 The preferred output is a single self-contained `.html` file.
 
-The standalone document should contain all required presentation assets locally, including CSS and JavaScript required for the exported functionality.
+Required presentation assets are embedded or otherwise included locally in the generated document.
 
-The exported HTML is a derived representation of the stored Markdown.
+The export is a derived representation of stored Markdown.
 
-The Markdown files remain the source of truth and must not be replaced by exported HTML.
+The Markdown files remain authoritative.
 
-Standalone export should reuse the same Markdown rendering layer as the local viewer where practical.
-
-The export format should remain independent from the local viewer's HTTP routes and filesystem layout.
+Standalone export reuses the Markdown rendering layer where practical but remains independent from the viewer's HTTP routes and filesystem layout.
 
 ---
 
-# 16. Templates, CSS and JavaScript
+# 22. Templates, CSS and JavaScript
 
-The UI should not be implemented as one large Python file containing HTML/CSS/JavaScript strings.
+The UI is separated from Python application logic.
 
 The intended structure is:
 
 ```text
 templates/
-└── index.html
+└── ...
 
 static/
 ├── css/
-│   ├── base.css
-│   ├── viewer.css
-│   └── toc.css
+│   └── ...
 └── js/
-    ├── viewer.js
-    ├── toc.js
-    └── reload.js
+    └── ...
 ```
 
-Python modules should remain small and logically cohesive.
+Python modules should not become large files containing HTML, CSS and JavaScript strings.
 
-This is important because individual files should be easy to inspect, modify and provide to an AI assistant.
+The exact number and names of assets may evolve as the viewer grows.
+
+The important architectural boundary is that presentation assets remain separate from storage and domain logic.
 
 ---
 
-# 17. Tests
+# 23. Tests
 
-Tests live in:
+The project uses automated tests as an architectural protection mechanism.
+
+Python tests live in:
 
 ```text
 tests/
 ```
 
-Current test files:
+The extension has its own test suite under:
 
 ```text
-tests/
-├── test_models.py
-└── test_storage.py
+extension/tests/
 ```
 
-Tests are run from the project root with:
+Python tests cover the domain, storage, API, API client and viewer behavior.
+
+The extension tests cover, among other things:
+
+* provider URL handling;
+* provider adapters;
+* chat context;
+* clipboard behavior;
+* extension UI;
+* browser runtime;
+* API client;
+* saving messages;
+* browser storage;
+* project configuration;
+* content-script initialization;
+* manifest requirements.
+
+The exact test count is intentionally not treated as an architectural requirement because the suite changes as functionality evolves.
+
+Tests are run from the appropriate project directory.
+
+Python:
 
 ```powershell
 python -m pytest -v
 ```
 
-Do not rely on the standalone `pytest` executable being available in PATH.
+Extension:
 
-Current tests cover:
+```powershell
+npm test
+```
 
-* Message defaults;
-* Chat defaults;
-* Project defaults;
-* custom Message filename;
-* Project save/load;
-* missing Project;
-* Chat save/load;
-* expected filesystem structure;
-* saving Chat with missing Project;
-* Message timestamp update semantics;
-* unchanged Message timestamp preservation;
-* avoiding duplicate Markdown files.
+A focused test is run immediately after an individual change.
 
-Tests are part of the architecture protection, not only final validation.
+After a coherent sequence of changes is complete, the relevant full suite is run.
+
+A `FAILED` or `ERROR` result must be investigated before proceeding.
 
 ---
 
-# 18. Development Workflow
+# 24. Development Workflow
 
-Development follows a small-step test-driven workflow:
+Development follows a small-step TDD workflow:
 
 ```text
 1. Define one small behavior
-2. Write/update a test
+2. Write or update a focused test
 3. Implement the behavior
-4. Run the full test suite
-5. Fix failures
-6. Continue only when green
+4. Run the focused test
+5. Investigate and fix failures
+6. Run the relevant full suite after a coherent sequence
+7. Continue only when green
 ```
 
-The normal validation command is:
+The workflow deliberately avoids making several unrelated architectural changes at once.
+
+For Python:
 
 ```powershell
 python -m pytest -v
 ```
 
-Expected successful result:
+For the extension:
 
-```text
-X passed
+```powershell
+npm test
 ```
 
-A `FAILED` result must be investigated before proceeding.
-
-An `ERROR` result must also be investigated before proceeding.
+The development process favors small, independently verifiable increments.
 
 ---
 
-# 19. Local-First Principles
+# 25. Local-First Principles
 
 The project follows these principles:
 
-1. Filesystem is the source of truth.
+1. The filesystem is the source of truth.
 2. Markdown is the primary human-readable message representation.
-3. JSON stores metadata and indexes.
+3. JSON stores metadata and structured indexes.
 4. The viewer does not own the data.
-5. Provider-specific logic is isolated.
-6. Cloud storage is not required.
-7. Git should work naturally with the archive.
-8. Search/indexing can evolve independently from storage.
-9. Small cohesive source files are preferred.
-10. Avoid premature infrastructure and unnecessary abstractions.
+5. The browser extension does not own the data.
+6. Provider-specific logic is isolated.
+7. Cloud storage is not required.
+8. Git should work naturally with the archive.
+9. Search can evolve independently from storage.
+10. Browser storage contains extension configuration, not archive content.
+11. Derived HTML must never replace Markdown as the authoritative representation.
+12. Small cohesive source files are preferred.
+13. Avoid premature infrastructure and unnecessary abstractions.
 
 ---
 
-# 20. Important Constraints
+# 26. Important Constraints
 
-The following constraints are architectural requirements.
+## One logical Message = one Markdown file
 
-### One logical Message = one Markdown file
-
-Do not split one AI response into multiple artificial Message objects merely because it contains:
+Do not split one logical AI response into multiple artificial Message objects merely because it contains:
 
 * text;
 * code;
@@ -670,72 +965,219 @@ Do not split one AI response into multiple artificial Message objects merely bec
 
 All of that remains one Markdown document when it represents one logical message.
 
-### Viewer is read-oriented
+## Message filenames are stable
+
+Updating a Message must preserve its existing filename.
+
+The storage layer does not renumber existing Messages or rename files merely because a role or other property changes.
+
+## Viewer is read-oriented
 
 The viewer renders stored data.
 
-It is not the primary editing/storage system.
+It is not the primary editing or storage system.
 
-### Filesystem remains authoritative
+## Extension is manually curated
+
+The extension does not currently attempt to scrape the entire provider conversation.
+
+The user explicitly chooses what to capture, normally through the provider's own Copy Markdown functionality, and can edit the Markdown before saving.
+
+## Filesystem remains authoritative
 
 Adding a database, search index or cache in the future must not make it the authoritative copy of the conversation.
 
-### Avoid premature complexity
+## Search is not a viewer responsibility
 
-Do not introduce a database, message queue, background worker, complex dependency injection framework or other infrastructure until a concrete requirement exists.
+Search is provided through storage/API infrastructure.
+
+The viewer remains primarily a reading and navigation interface.
+
+## Avoid premature complexity
+
+Do not introduce:
+
+* a database;
+* a message queue;
+* a background worker;
+* complex dependency injection;
+* automatic full-conversation scraping;
+* automatic synchronization;
+* a dedicated search index;
+
+until a concrete requirement justifies the additional complexity.
 
 ---
 
-# 21. Current Project State
+# 27. Current Project State
 
-Implemented:
+The following functionality is currently implemented.
+
+## Backend / domain
 
 ```text
 Project model
 Chat model
 Message model
 ChatSummary model
-Filesystem storage
+SearchResult model
+UTC timezone-aware timestamps
+Message creation/update semantics
+Stable message filenames
+```
+
+## Filesystem storage
+
+```text
+Project save/load/list
+Chat save/load/list
+Message save/update
 JSON metadata
 Markdown message storage
-UTC timestamps
-Project loading/saving
-Chat loading/saving
+Metadata filtering
+Full-text message search
+SearchResult generation
+```
+
+## HTTP API
+
+```text
+Project listing
+Project creation
+Chat access
+Message creation
+Message update
+Message metadata
+Full-text search
+```
+
+## Python API client
+
+```text
+Project access
+Chat access
+Message creation
+Message update
+```
+
+## Viewer
+
+```text
+Jinja2 templates
+Markdown rendering
+Syntax highlighting
+Code copy functionality
+Project listing
 Chat listing
-Metadata filtering foundation
-Local HTTP API
-HTTP client
-Jinja2-based viewer
+Chat viewing
+Navigation
+Standalone HTML export
 Separate CSS
 Separate JavaScript
-Project listing page
-Project chat listing
-Chat viewing page
 ```
 
-Partially implemented / currently under development:
+## Browser extension
 
 ```text
-Markdown-to-HTML rendering
-Viewer presentation
-Code block rendering
+TypeScript extension project
+Manifest V3
+ChatGPT provider adapter
+Provider/chat context detection
+Chat URL generation
+Clipboard reading
+Markdown editor
+Shadow DOM UI
+Browser runtime
+Local API client
+Message saving
+Selected project configuration
+chrome.storage.local
+Chrome storage permission
 ```
 
-Not implemented yet:
+## Testing
+
+The Python and extension layers have dedicated automated test suites.
+
+The extension suite currently covers 28 test files and 97 tests.
+
+The test suite is expected to grow as functionality is added.
+
+---
+
+# 28. Current Extension Boundaries
+
+The browser extension is intentionally limited to the following responsibilities:
 
 ```text
-Standalone HTML export
-Syntax highlighting
-Copy buttons for code blocks
-Full-text search
-Search result model
-Provider implementations
-ChatGPT integration
-Synchronization logic
-Chrome Extension
-Extension Markdown editor
-Viewer message editing
+Provider page
+     │
+     ├── identify provider
+     ├── identify chat
+     ├── identify title
+     │
+     ▼
+User chooses/copies content
+     │
+     ▼
+Clipboard
+     │
+     ▼
+Markdown editor
+     │
+     ▼
+Local HTTP API
 ```
 
-The next development steps should continue incrementally from the existing tested storage, API and viewer layers.
+The extension does not currently:
 
+* parse the complete provider DOM;
+* automatically import every message;
+* maintain an independent conversation database;
+* write directly to the filesystem;
+* synchronize conversations in the background;
+* provide a separate search index.
+
+These are deferred until concrete requirements appear.
+
+---
+
+# 29. Future Development Direction
+
+The next features should be implemented incrementally.
+
+Likely areas include:
+
+```text
+Extension project selection UI
+Project management through the extension
+Chat navigation from search results
+Additional provider adapters
+Improved chat-title observation
+Additional API operations where required
+```
+
+Potential future work includes:
+
+```text
+Automatic conversation import
+Additional providers
+Advanced search/indexing
+Attachments
+More extension settings
+Optional synchronization features
+```
+
+These features should be introduced only when their concrete behavior is understood and can be protected with focused tests.
+
+The architecture should continue to prefer:
+
+```text
+small behavior
+→ focused test
+→ implementation
+→ focused green test
+→ coherent full-suite verification
+```
+
+over large speculative subsystems.

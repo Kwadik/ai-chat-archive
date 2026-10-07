@@ -24,7 +24,7 @@
     }
   };
 
-  // src/content.ts
+  // src/chat/content.ts
   function getCurrentProvider(url) {
     if (chatgptProvider.canHandle(url)) {
       return chatgptProvider;
@@ -47,7 +47,7 @@
     };
   }
 
-  // src/clipboard.ts
+  // src/clipboard/clipboard.ts
   async function readMarkdownFromClipboard(clipboard) {
     if (clipboard === null) {
       return null;
@@ -59,7 +59,7 @@
     }
   }
 
-  // src/extension-root.ts
+  // src/ui/extension-root.ts
   function createExtensionRoot(document2) {
     const existingRoot = document2.getElementById(
       "ai-chat-archive-root"
@@ -77,7 +77,7 @@
     return root;
   }
 
-  // src/extension-editor.ts
+  // src/ui/extension-editor.ts
   function createExtensionEditor(initialMarkdown, onSave, onCancel) {
     const editor = document.createElement("div");
     const textarea = document.createElement("textarea");
@@ -105,7 +105,7 @@
     return editor;
   }
 
-  // src/extension-panel.ts
+  // src/ui/extension-panel.ts
   function createExtensionPanel(root) {
     const existingPanel = root.shadowRoot?.querySelector(
       "[data-ai-chat-archive-panel]"
@@ -162,7 +162,7 @@
     panel.hidden = false;
   }
 
-  // src/extension-ui.ts
+  // src/ui/extension-ui.ts
   function createExtensionUI(document2, context, onSave, onCancel, clipboard) {
     const root = createExtensionRoot(document2);
     const panel = createExtensionPanel(root);
@@ -187,7 +187,7 @@
     };
   }
 
-  // src/content-ui.ts
+  // src/chat/content-ui.ts
   function createContentUI(document2, context, onSave, onCancel, clipboard) {
     return createExtensionUI(
       document2,
@@ -198,7 +198,7 @@
     );
   }
 
-  // src/content-ui-runtime.ts
+  // src/chat/content-ui-runtime.ts
   function initializeContentUI(document2, url, onSave, onCancel, clipboard) {
     const context = getCurrentChatContext(
       url,
@@ -218,7 +218,7 @@
     );
   }
 
-  // src/content-runtime.ts
+  // src/chat/content-runtime.ts
   function runContentScript(runtime, document2, onSave, onCancel, clipboard) {
     return initializeContentUI(
       document2,
@@ -229,7 +229,7 @@
     );
   }
 
-  // src/save-message.ts
+  // src/save/save-message.ts
   async function saveMessage(apiClient, context, markdown, projectId) {
     return apiClient.createMessage({
       projectId,
@@ -240,7 +240,7 @@
     });
   }
 
-  // src/browser-content-runtime.ts
+  // src/chat/browser-content-runtime.ts
   function runBrowserContentScript(onSave = () => {
   }, onCancel = () => {
   }, apiClient, projectId = "default") {
@@ -267,7 +267,7 @@
     );
   }
 
-  // src/api-client.ts
+  // src/api/api-client.ts
   var ExtensionApiClient = class {
     constructor(baseUrl, fetchFn = fetch) {
       this.baseUrl = baseUrl;
@@ -297,20 +297,34 @@
       }
       return response.json();
     }
+    async listProjects() {
+      const response = await this.fetchFn(
+        `${this.baseUrl}/projects`,
+        {
+          method: "GET"
+        }
+      );
+      if (!response.ok) {
+        throw new Error(
+          `API request failed with status ${response.status}`
+        );
+      }
+      return response.json();
+    }
   };
 
-  // src/browser-api-client.ts
+  // src/api/browser-api-client.ts
   var DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
   function createBrowserApiClient(baseUrl = DEFAULT_API_BASE_URL) {
     return new ExtensionApiClient(baseUrl);
   }
 
-  // src/browser-storage.ts
+  // src/storage/browser-storage.ts
   function getBrowserStorage(chrome2) {
     return chrome2.storage;
   }
 
-  // src/extension-storage.ts
+  // src/storage/extension-storage.ts
   var SELECTED_PROJECT_KEY = "selectedProjectId";
   async function getStoredProjectId(storage) {
     const values = await storage.local.get(
@@ -320,14 +334,14 @@
     return typeof projectId === "string" ? projectId : null;
   }
 
-  // src/project-config.ts
+  // src/project/project-config.ts
   var DEFAULT_PROJECT_ID = "default";
   async function getSelectedProjectId(storage) {
     const projectId = await getStoredProjectId(storage);
     return projectId ?? DEFAULT_PROJECT_ID;
   }
 
-  // src/browser-content-script.ts
+  // src/chat/browser-content-script.ts
   async function initializeBrowserContentScript(chrome2, apiClient, run = runBrowserContentScript) {
     const storage = getBrowserStorage(chrome2);
     const projectId = await getSelectedProjectId(storage);

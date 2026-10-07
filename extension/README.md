@@ -72,6 +72,94 @@ Content Script
        Markdown + JSON files
 ````
 
+## Project structure
+
+The extension source is organized by responsibility rather than by technical file type.
+
+```text
+extension/
+├── src/
+│   ├── api/
+│   │   ├── api-client.ts
+│   │   └── browser-api-client.ts
+│   │
+│   ├── chat/
+│   │   ├── chat-context.ts
+│   │   ├── content.ts
+│   │   ├── content-entry.ts
+│   │   ├── content-runtime.ts
+│   │   ├── content-ui.ts
+│   │   ├── content-ui-runtime.ts
+│   │   ├── browser-content-runtime.ts
+│   │   └── browser-content-script.ts
+│   │
+│   ├── clipboard/
+│   │   ├── clipboard.ts
+│   │   └── browser-clipboard.ts
+│   │
+│   ├── project/
+│   │   ├── project-config.ts
+│   │   ├── project-selector.ts
+│   │   └── project-selection.ts
+│   │
+│   ├── storage/
+│   │   ├── extension-storage.ts
+│   │   └── browser-storage.ts
+│   │
+│   ├── ui/
+│   │   ├── extension-editor.ts
+│   │   ├── extension-panel.ts
+│   │   ├── extension-root.ts
+│   │   └── extension-ui.ts
+│   │
+│   ├── providers/
+│   │   ├── types.ts
+│   │   ├── chatgpt.ts
+│   │   └── chatgpt-url.ts
+│   │
+│   ├── save/
+│   │   └── save-message.ts
+│   │
+│   └── content-script.ts
+│
+├── tests/
+│   ├── api/
+│   ├── chat/
+│   ├── clipboard/
+│   ├── project/
+│   ├── storage/
+│   ├── ui/
+│   ├── providers/
+│   └── save/
+│
+├── manifest.json
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+### Directory responsibilities
+
+* `api/` — local HTTP API client and browser-specific API client setup.
+* `chat/` — current chat context and content-script orchestration.
+* `clipboard/` — clipboard abstraction and browser implementation.
+* `project/` — project configuration, selection, and project-related UI.
+* `storage/` — browser extension storage abstraction.
+* `ui/` — extension UI components and Shadow DOM presentation.
+* `providers/` — provider-specific adapters and URL handling.
+* `save/` — message save workflow.
+* `tests/` — tests organized to mirror the responsibilities in `src/`.
+
+### Organization rule
+
+Code is grouped by responsibility, not by implementation mechanism.
+
+For example, `chat/content-ui.ts` belongs to `chat/` because it adapts chat/content logic to the UI. The actual UI implementation remains under `ui/`.
+
+New code should normally be added to an existing responsibility area. A new directory should be introduced only when a new, independently meaningful responsibility appears.
+
+
+
 The extension communicates with the local application through its HTTP API.
 
 The filesystem remains the source of truth.

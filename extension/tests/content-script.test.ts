@@ -1,9 +1,12 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_PROJECT_ID } from "../src/project-config";
+import { DEFAULT_PROJECT_ID } from "../src/project/project-config";
 
 const runBrowserContentScript = vi.fn();
 
-vi.mock("../src/browser-content-runtime", () => ({
+vi.mock("../src/chat/browser-content-runtime", () => ({
     runBrowserContentScript,
 }));
 
@@ -51,11 +54,11 @@ describe("content script", () => {
             () => "api-client",
         );
 
-        vi.doMock("../src/browser-content-script", () => ({
+        vi.doMock("../src/chat/browser-content-script", () => ({
             initializeBrowserContentScript,
         }));
 
-        vi.doMock("../src/browser-api-client", () => ({
+        vi.doMock("../src/api/browser-api-client", () => ({
             createBrowserApiClient,
         }));
 
