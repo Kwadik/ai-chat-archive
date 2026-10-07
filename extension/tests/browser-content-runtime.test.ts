@@ -83,4 +83,52 @@ describe("runBrowserContentScript", () => {
 
         vi.unstubAllGlobals();
     });
+
+    it("passes saved Markdown and chat context to the save callback", () => {
+        vi.stubGlobal("window", {
+            location: {
+                href: "https://chatgpt.com/c/chat-123",
+            },
+        });
+
+        document.title = "Test chat";
+
+        const onSave = vi.fn();
+
+        const ui = runBrowserContentScript(
+            onSave,
+            () => {},
+        );
+
+        expect(ui).toBeDefined();
+
+        ui!.openEditor("Initial Markdown");
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const textarea = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-editor]",
+        ) as HTMLTextAreaElement;
+
+        textarea.value = "Saved **Markdown**";
+
+        const saveButton = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-save]",
+        ) as HTMLButtonElement;
+
+        saveButton.click();
+
+        expect(onSave).toHaveBeenCalledWith(
+            "Saved **Markdown**",
+            {
+                provider: "chatgpt",
+                chatId: "chat-123",
+                title: "Test chat",
+            },
+        );
+
+        vi.unstubAllGlobals();
+    });
 });

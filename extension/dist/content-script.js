@@ -230,7 +230,9 @@
   }
 
   // src/browser-content-runtime.ts
-  function runBrowserContentScript() {
+  function runBrowserContentScript(onSave = () => {
+  }, onCancel = () => {
+  }) {
     return runContentScript(
       {
         location: {
@@ -238,10 +240,8 @@
         }
       },
       document,
-      () => {
-      },
-      () => {
-      },
+      onSave,
+      onCancel,
       navigator.clipboard ?? null
     );
   }

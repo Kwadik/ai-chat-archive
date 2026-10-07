@@ -1,6 +1,10 @@
 import { runContentScript } from "./content-runtime";
+import type { ChatContext } from "./chat-context";
 
-export function runBrowserContentScript() {
+export function runBrowserContentScript(
+    onSave: (markdown: string, context: ChatContext) => void = () => {},
+    onCancel: () => void = () => {},
+) {
     return runContentScript(
         {
             location: {
@@ -8,8 +12,8 @@ export function runBrowserContentScript() {
             },
         },
         document,
-        () => {},
-        () => {},
+        onSave,
+        onCancel,
         navigator.clipboard ?? null,
     );
 }
