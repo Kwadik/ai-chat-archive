@@ -23,6 +23,7 @@ describe("extension UI", () => {
             context,
             onSave,
             onCancel,
+            null,
         );
 
         ui.openEditor("Hello **world**");
@@ -39,17 +40,25 @@ describe("extension UI", () => {
         expect(textarea.value).toBe("Hello **world**");
     });
 
-    it("saves edited Markdown", () => {
+    it("passes Markdown and chat context to the save callback", () => {
         const onSave = vi.fn();
+        const onCancel = vi.fn();
+
+        const context: ChatContext = {
+            provider: "chatgpt",
+            chatId: "chat-123",
+            title: "Test chat",
+        };
 
         const ui = createExtensionUI(
             document,
             context,
             onSave,
-            vi.fn(),
+            onCancel,
+            null,
         );
 
-        ui.openEditor("Initial");
+        ui.openEditor("Edited **Markdown**");
 
         const root = document.querySelector(
             "#ai-chat-archive-root",
@@ -59,7 +68,7 @@ describe("extension UI", () => {
             "[data-ai-chat-archive-editor]",
         ) as HTMLTextAreaElement;
 
-        textarea.value = "Edited";
+        textarea.value = "Updated content";
 
         const saveButton = root.shadowRoot?.querySelector(
             "[data-ai-chat-archive-save]",
@@ -67,7 +76,10 @@ describe("extension UI", () => {
 
         saveButton.click();
 
-        expect(onSave).toHaveBeenCalledWith("Edited");
+        expect(onSave).toHaveBeenCalledWith(
+            "Updated content",
+            context,
+        );
     });
 
     it("cancels editing", () => {
@@ -78,6 +90,7 @@ describe("extension UI", () => {
             context,
             vi.fn(),
             onCancel,
+            null,
         );
 
         ui.openEditor("Initial");
@@ -101,6 +114,7 @@ describe("extension UI", () => {
             context,
             vi.fn(),
             vi.fn(),
+            null,
         );
 
         ui.openEditor("Initial");
@@ -120,5 +134,73 @@ describe("extension UI", () => {
         closeButton.click();
 
         expect(panel.hidden).toBe(true);
+    });
+
+    it("opens the editor with Markdown from clipboard", async () => {
+        const onSave = vi.fn();
+        const onCancel = vi.fn();
+
+        const context: ChatContext = {
+            provider: "chatgpt",
+            chatId: "chat-123",
+            title: null,
+        };
+
+        const clipboard = {
+            readText: vi.fn().mockResolvedValue(
+                "Copied **Markdown**",
+            ),
+        };
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            onSave,
+            onCancel,
+            clipboard,
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const textarea = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-editor]",
+        ) as HTMLTextAreaElement;
+
+        expect(textarea.value).toBe("Copied **Markdown**");
+    });
+
+    it("opens an empty editor when clipboard is unavailable", async () => {
+        const onSave = vi.fn();
+        const onCancel = vi.fn();
+
+        const context: ChatContext = {
+            provider: "chatgpt",
+            chatId: "chat-123",
+            title: null,
+        };
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            onSave,
+            onCancel,
+            null,
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const textarea = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-editor]",
+        ) as HTMLTextAreaElement;
+
+        expect(textarea.value).toBe("");
     });
 });

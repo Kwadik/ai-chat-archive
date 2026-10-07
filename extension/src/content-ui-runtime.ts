@@ -6,12 +6,15 @@ import {
 } from "./content-ui";
 import type { ExtensionUI } from "./extension-ui";
 import type { ProviderDocument } from "./providers/types";
+import type { ChatContext } from "./chat-context";
+import type { ClipboardReader } from "./clipboard";
 
 export function initializeContentUI(
     document: Document,
     url: URL,
-    onSave: (markdown: string) => void,
+    onSave: (markdown: string, context: ChatContext) => void,
     onCancel: () => void,
+    clipboard: ClipboardReader | null,
 ): ExtensionUI | null {
     const context = getCurrentChatContext(
         url,
@@ -29,5 +32,6 @@ export function initializeContentUI(
         context,
         onSave,
         onCancel,
+        clipboard,
     );
 }

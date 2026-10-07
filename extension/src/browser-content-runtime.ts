@@ -10,5 +10,6 @@ export function runBrowserContentScript() {
         document,
         () => {},
         () => {},
+        navigator.clipboard ?? null,
     );
 }

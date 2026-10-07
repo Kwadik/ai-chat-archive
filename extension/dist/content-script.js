@@ -47,6 +47,18 @@
     };
   }
 
+  // src/clipboard.ts
+  async function readMarkdownFromClipboard(clipboard) {
+    if (clipboard === null) {
+      return null;
+    }
+    try {
+      return await clipboard.readText();
+    } catch {
+      return null;
+    }
+  }
+
   // src/extension-root.ts
   function createExtensionRoot(document2) {
     const existingRoot = document2.getElementById(
@@ -151,7 +163,7 @@
   }
 
   // src/extension-ui.ts
-  function createExtensionUI(document2, context, onSave, onCancel) {
+  function createExtensionUI(document2, context, onSave, onCancel, clipboard) {
     const root = createExtensionRoot(document2);
     const panel = createExtensionPanel(root);
     return {
@@ -160,25 +172,34 @@
         showExtensionEditor(
           panel,
           initialMarkdown,
-          onSave,
+          (markdown) => {
+            onSave(markdown, context);
+          },
           onCancel
         );
+      },
+      async openEditorFromClipboard() {
+        const markdown = await readMarkdownFromClipboard(
+          clipboard
+        );
+        this.openEditor(markdown ?? "");
       }
     };
   }
 
   // src/content-ui.ts
-  function createContentUI(document2, context, onSave, onCancel) {
+  function createContentUI(document2, context, onSave, onCancel, clipboard) {
     return createExtensionUI(
       document2,
       context,
       onSave,
-      onCancel
+      onCancel,
+      clipboard
     );
   }
 
   // src/content-ui-runtime.ts
-  function initializeContentUI(document2, url, onSave, onCancel) {
+  function initializeContentUI(document2, url, onSave, onCancel, clipboard) {
     const context = getCurrentChatContext(
       url,
       {
@@ -192,17 +213,19 @@
       document2,
       context,
       onSave,
-      onCancel
+      onCancel,
+      clipboard
     );
   }
 
   // src/content-runtime.ts
-  function runContentScript(runtime, document2, onSave, onCancel) {
+  function runContentScript(runtime, document2, onSave, onCancel, clipboard) {
     return initializeContentUI(
       document2,
       new URL(runtime.location.href),
       onSave,
-      onCancel
+      onCancel,
+      clipboard
     );
   }
 
@@ -218,7 +241,8 @@
       () => {
       },
       () => {
-      }
+      },
+      navigator.clipboard ?? null
     );
   }
 
