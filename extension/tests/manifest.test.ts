@@ -40,4 +40,17 @@ describe("extension manifest", () => {
             "content-script.js",
         ]);
     });
+
+    it("requests browser storage permission", async () => {
+        const manifestPath = resolve(
+            import.meta.dirname,
+            "../manifest.json",
+        );
+
+        const manifest = JSON.parse(
+            readFileSync(manifestPath, "utf-8"),
+        );
+
+        expect(manifest.permissions).toContain("storage");
+    });
 });

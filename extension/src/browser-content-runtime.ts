@@ -8,6 +8,7 @@ export function runBrowserContentScript(
     onSave: (markdown: string, context: ChatContext) => void = () => {},
     onCancel: () => void = () => {},
     apiClient?: ExtensionApiClient,
+    projectId: string = "default",
 ) {
     return runContentScript(
         {
@@ -22,7 +23,7 @@ export function runBrowserContentScript(
                     apiClient,
                     context,
                     markdown,
-                    "default",
+                    projectId,
                 );
             }
 

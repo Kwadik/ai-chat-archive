@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_PROJECT_ID } from "../src/project-config";
 
 const runBrowserContentScript = vi.fn();
 
@@ -8,16 +9,66 @@ vi.mock("../src/browser-content-runtime", () => ({
 
 describe("content script", () => {
     it("starts the browser runtime with the local API client", async () => {
+        vi.stubGlobal("chrome", {
+            storage: {
+                local: {
+                    get: vi.fn().mockResolvedValue({}),
+                    set: vi.fn().mockResolvedValue(undefined),
+                },
+            },
+        });
+
         await import("../src/content-script");
 
         expect(runBrowserContentScript).toHaveBeenCalledTimes(1);
 
-        const apiClient =
-            runBrowserContentScript.mock.calls[0][2];
+        const args = runBrowserContentScript.mock.calls[0];
 
-        expect(apiClient).toBeDefined();
-        expect(apiClient.constructor.name).toBe(
+        expect(args[2]).toBeDefined();
+        expect(args[2].constructor.name).toBe(
             "ExtensionApiClient",
+        );
+
+        expect(args[3]).toBe(DEFAULT_PROJECT_ID);
+    });
+
+    it("initializes the browser content script with chrome storage and API client", async () => {
+        vi.resetModules();
+
+        const chrome = {
+            storage: {
+                local: {
+                    get: vi.fn().mockResolvedValue({}),
+                    set: vi.fn().mockResolvedValue(undefined),
+                },
+            },
+        };
+
+        vi.stubGlobal("chrome", chrome);
+
+        const initializeBrowserContentScript = vi.fn();
+        const createBrowserApiClient = vi.fn(
+            () => "api-client",
+        );
+
+        vi.doMock("../src/browser-content-script", () => ({
+            initializeBrowserContentScript,
+        }));
+
+        vi.doMock("../src/browser-api-client", () => ({
+            createBrowserApiClient,
+        }));
+
+        await import("../src/content-script");
+
+        expect(createBrowserApiClient).toHaveBeenCalledTimes(1);
+
+        expect(
+            initializeBrowserContentScript,
+        ).toHaveBeenCalledWith(
+            chrome,
+            "api-client",
+            expect.any(Function),
         );
     });
 });

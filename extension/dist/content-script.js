@@ -230,8 +230,8 @@
   }
 
   // src/save-message.ts
-  async function saveMessage(apiClient2, context, markdown, projectId) {
-    return apiClient2.createMessage({
+  async function saveMessage(apiClient, context, markdown, projectId) {
+    return apiClient.createMessage({
       projectId,
       provider: context.provider,
       chatId: context.chatId,
@@ -243,7 +243,7 @@
   // src/browser-content-runtime.ts
   function runBrowserContentScript(onSave = () => {
   }, onCancel = () => {
-  }, apiClient2) {
+  }, apiClient, projectId = "default") {
     return runContentScript(
       {
         location: {
@@ -252,12 +252,12 @@
       },
       document,
       (markdown, context) => {
-        if (apiClient2) {
+        if (apiClient) {
           void saveMessage(
-            apiClient2,
+            apiClient,
             context,
             markdown,
-            "default"
+            projectId
           );
         }
         onSave(markdown, context);
@@ -305,13 +305,46 @@
     return new ExtensionApiClient(baseUrl);
   }
 
+  // src/browser-storage.ts
+  function getBrowserStorage(chrome2) {
+    return chrome2.storage;
+  }
+
+  // src/extension-storage.ts
+  var SELECTED_PROJECT_KEY = "selectedProjectId";
+  async function getStoredProjectId(storage) {
+    const values = await storage.local.get(
+      SELECTED_PROJECT_KEY
+    );
+    const projectId = values[SELECTED_PROJECT_KEY];
+    return typeof projectId === "string" ? projectId : null;
+  }
+
+  // src/project-config.ts
+  var DEFAULT_PROJECT_ID = "default";
+  async function getSelectedProjectId(storage) {
+    const projectId = await getStoredProjectId(storage);
+    return projectId ?? DEFAULT_PROJECT_ID;
+  }
+
+  // src/browser-content-script.ts
+  async function initializeBrowserContentScript(chrome2, apiClient, run = runBrowserContentScript) {
+    const storage = getBrowserStorage(chrome2);
+    const projectId = await getSelectedProjectId(storage);
+    run(
+      () => {
+      },
+      () => {
+      },
+      apiClient,
+      projectId
+    );
+  }
+
   // src/content-script.ts
-  var apiClient = createBrowserApiClient();
-  runBrowserContentScript(
-    () => {
-    },
-    () => {
-    },
-    apiClient
+  void initializeBrowserContentScript(
+    chrome,
+    createBrowserApiClient(),
+    runBrowserContentScript
   );
 })();

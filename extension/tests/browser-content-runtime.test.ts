@@ -183,6 +183,55 @@ describe("runBrowserContentScript", () => {
         vi.unstubAllGlobals();
     });
 
+    it("uses the provided project when saving", () => {
+        vi.stubGlobal("window", {
+            location: {
+                href: "https://chatgpt.com/c/chat-123",
+            },
+        });
+
+        document.title = "Test chat";
+
+        const apiClient = {
+            createMessage: vi.fn().mockResolvedValue({
+                number: 1,
+                role: "user",
+                file_name: "001-user.md",
+            }),
+        } as unknown as ExtensionApiClient;
+
+        const ui = runBrowserContentScript(
+            () => {},
+            () => {},
+            apiClient,
+            "project-python",
+        );
+
+        expect(ui).toBeDefined();
+
+        ui!.openEditor("Python Markdown");
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const saveButton = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-save]",
+        ) as HTMLButtonElement;
+
+        saveButton.click();
+
+        expect(apiClient.createMessage).toHaveBeenCalledWith({
+            projectId: "project-python",
+            provider: "chatgpt",
+            chatId: "chat-123",
+            role: "user",
+            content: "Python Markdown",
+        });
+
+        vi.unstubAllGlobals();
+    });
+
     it("uses the provided API client when saving", () => {
         vi.stubGlobal("window", {
             location: {
