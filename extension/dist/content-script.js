@@ -230,8 +230,8 @@
   }
 
   // src/save-message.ts
-  async function saveMessage(apiClient, context, markdown, projectId) {
-    return apiClient.createMessage({
+  async function saveMessage(apiClient2, context, markdown, projectId) {
+    return apiClient2.createMessage({
       projectId,
       provider: context.provider,
       chatId: context.chatId,
@@ -243,7 +243,7 @@
   // src/browser-content-runtime.ts
   function runBrowserContentScript(onSave = () => {
   }, onCancel = () => {
-  }, apiClient) {
+  }, apiClient2) {
     return runContentScript(
       {
         location: {
@@ -252,9 +252,9 @@
       },
       document,
       (markdown, context) => {
-        if (apiClient) {
+        if (apiClient2) {
           void saveMessage(
-            apiClient,
+            apiClient2,
             context,
             markdown,
             "default"
@@ -267,6 +267,51 @@
     );
   }
 
+  // src/api-client.ts
+  var ExtensionApiClient = class {
+    constructor(baseUrl, fetchFn = fetch) {
+      this.baseUrl = baseUrl;
+      this.fetchFn = fetchFn;
+    }
+    baseUrl;
+    fetchFn;
+    async createMessage(input) {
+      const url = `${this.baseUrl}/projects/${input.projectId}/chats/${input.provider}/${input.chatId}/messages`;
+      const response = await this.fetchFn(
+        url,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            role: input.role,
+            content: input.content
+          })
+        }
+      );
+      if (!response.ok) {
+        throw new Error(
+          `API request failed with status ${response.status}`
+        );
+      }
+      return response.json();
+    }
+  };
+
+  // src/browser-api-client.ts
+  var DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+  function createBrowserApiClient(baseUrl = DEFAULT_API_BASE_URL) {
+    return new ExtensionApiClient(baseUrl);
+  }
+
   // src/content-script.ts
-  runBrowserContentScript();
+  var apiClient = createBrowserApiClient();
+  runBrowserContentScript(
+    () => {
+    },
+    () => {
+    },
+    apiClient
+  );
 })();

@@ -7,9 +7,17 @@ vi.mock("../src/browser-content-runtime", () => ({
 }));
 
 describe("content script", () => {
-    it("starts browser content runtime", async () => {
+    it("starts the browser runtime with the local API client", async () => {
         await import("../src/content-script");
 
-        expect(runBrowserContentScript).toHaveBeenCalledOnce();
+        expect(runBrowserContentScript).toHaveBeenCalledTimes(1);
+
+        const apiClient =
+            runBrowserContentScript.mock.calls[0][2];
+
+        expect(apiClient).toBeDefined();
+        expect(apiClient.constructor.name).toBe(
+            "ExtensionApiClient",
+        );
     });
 });

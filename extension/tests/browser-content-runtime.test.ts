@@ -182,4 +182,32 @@ describe("runBrowserContentScript", () => {
 
         vi.unstubAllGlobals();
     });
+
+    it("uses the provided API client when saving", () => {
+        vi.stubGlobal("window", {
+            location: {
+                href: "https://chatgpt.com/c/chat-123",
+            },
+        });
+
+        document.title = "Test chat";
+
+        const apiClient = {
+            createMessage: vi.fn().mockResolvedValue({
+                number: 1,
+                role: "user",
+                file_name: "001-user.md",
+            }),
+        } as unknown as ExtensionApiClient;
+
+        const ui = runBrowserContentScript(
+            () => {},
+            () => {},
+            apiClient,
+        );
+
+        expect(ui).toBeDefined();
+
+        vi.unstubAllGlobals();
+    });
 });
