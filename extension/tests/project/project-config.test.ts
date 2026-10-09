@@ -5,7 +5,7 @@ import {
 } from "../../src/project/project-config";
 
 describe("project config", () => {
-    it("returns the default project when storage is empty", async () => {
+    it("returns null when no project is selected", async () => {
         const storage = {
             local: {
                 get: vi.fn().mockResolvedValue({}),
@@ -13,11 +13,9 @@ describe("project config", () => {
             },
         };
 
-        const projectId = await getSelectedProjectId(
-            storage,
-        );
+        const projectId = await getSelectedProjectId(storage);
 
-        expect(projectId).toBe("default");
+        expect(projectId).toBeNull();
     });
 
     it("stores and returns the selected project", async () => {

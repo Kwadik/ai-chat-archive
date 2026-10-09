@@ -8,7 +8,7 @@ export function runBrowserContentScript(
     onSave: (markdown: string, context: ChatContext) => void = () => {},
     onCancel: () => void = () => {},
     apiClient?: ExtensionApiClient,
-    projectId: string = "default",
+    projectId: string | null = null,
 ) {
     return runContentScript(
         {
@@ -18,7 +18,7 @@ export function runBrowserContentScript(
         },
         document,
         (markdown, context) => {
-            if (apiClient) {
+            if (apiClient && projectId !== null) {
                 void saveMessage(
                     apiClient,
                     context,

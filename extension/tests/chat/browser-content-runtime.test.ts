@@ -156,6 +156,7 @@ describe("runBrowserContentScript", () => {
             onSave,
             () => {},
             apiClient,
+            "default",
         );
 
         expect(ui).not.toBeNull();
@@ -256,6 +257,49 @@ describe("runBrowserContentScript", () => {
         );
 
         expect(ui).toBeDefined();
+
+        vi.unstubAllGlobals();
+    });
+
+    it("does not save through the API when no project is selected", () => {
+        vi.stubGlobal("window", {
+            location: {
+                href: "https://chatgpt.com/c/chat-123",
+            },
+        });
+
+        document.title = "Test chat";
+
+        const apiClient = {
+            createMessage: vi.fn().mockResolvedValue({
+                number: 1,
+                role: "user",
+                file_name: "001-user.md",
+            }),
+        } as unknown as ExtensionApiClient;
+
+        const ui = runBrowserContentScript(
+            () => {},
+            () => {},
+            apiClient,
+            null,
+        );
+
+        expect(ui).toBeDefined();
+
+        ui!.openEditor("Some Markdown");
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const saveButton = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-save]",
+        ) as HTMLButtonElement;
+
+        saveButton.click();
+
+        expect(apiClient.createMessage).not.toHaveBeenCalled();
 
         vi.unstubAllGlobals();
     });

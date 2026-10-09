@@ -11,7 +11,14 @@ describe("content UI runtime", () => {
             new URL("https://chatgpt.com/c/chat-123"),
             vi.fn(),
             vi.fn(),
+            null,
         );
+
+        expect(ui).not.toBeNull();
+
+        if (ui === null) {
+            throw new Error("Expected ChatGPT UI");
+        }
 
         expect(ui.context).toEqual({
             provider: "chatgpt",

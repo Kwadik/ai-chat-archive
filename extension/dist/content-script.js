@@ -243,7 +243,7 @@
   // src/chat/browser-content-runtime.ts
   function runBrowserContentScript(onSave = () => {
   }, onCancel = () => {
-  }, apiClient, projectId = "default") {
+  }, apiClient, projectId = null) {
     return runContentScript(
       {
         location: {
@@ -252,7 +252,7 @@
       },
       document,
       (markdown, context) => {
-        if (apiClient) {
+        if (apiClient && projectId !== null) {
           void saveMessage(
             apiClient,
             context,
@@ -335,10 +335,9 @@
   }
 
   // src/project/project-config.ts
-  var DEFAULT_PROJECT_ID = "default";
   async function getSelectedProjectId(storage) {
     const projectId = await getStoredProjectId(storage);
-    return projectId ?? DEFAULT_PROJECT_ID;
+    return projectId ?? null;
   }
 
   // src/chat/browser-content-script.ts

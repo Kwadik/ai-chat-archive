@@ -8,8 +8,14 @@ describe("content UI", () => {
     it("opens the editor through the extension UI", () => {
         const ui = createContentUI(
             document,
+            {
+                provider: "chatgpt",
+                chatId: "chat-123",
+                title: null,
+            },
             vi.fn(),
             vi.fn(),
+            null,
         );
 
         ui.openEditor("Hello **world**");

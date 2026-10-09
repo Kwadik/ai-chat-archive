@@ -71,4 +71,34 @@ describe("initializeBrowserContentScript", () => {
             "project-browser",
         );
     });
+
+    it("passes null when no project is selected", async () => {
+        const storage = {
+            local: {
+                get: vi.fn().mockResolvedValue({}),
+                set: vi.fn().mockResolvedValue(undefined),
+            },
+        };
+
+        const chrome = { storage };
+        const apiClient = {} as ExtensionApiClient;
+        const runBrowserContentScript = vi.fn();
+
+        const { initializeBrowserContentScript } = await import(
+            "../../src/chat/browser-content-script"
+            );
+
+        await initializeBrowserContentScript(
+            chrome,
+            apiClient,
+            runBrowserContentScript,
+        );
+
+        expect(runBrowserContentScript).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            apiClient,
+            null,
+        );
+    });
 });

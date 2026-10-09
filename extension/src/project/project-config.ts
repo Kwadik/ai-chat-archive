@@ -4,14 +4,12 @@ import {
     setStoredProjectId,
 } from "../storage/extension-storage";
 
-export const DEFAULT_PROJECT_ID = "default";
-
 export async function getSelectedProjectId(
     storage: ExtensionStorage,
-): Promise<string> {
+): Promise<string | null> {
     const projectId = await getStoredProjectId(storage);
 
-    return projectId ?? DEFAULT_PROJECT_ID;
+    return projectId ?? null;
 }
 
 export async function setSelectedProjectId(

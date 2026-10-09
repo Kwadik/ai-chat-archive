@@ -23,10 +23,12 @@ describe("ProviderAdapter", () => {
             },
         };
 
+        const document = { title: "Test chat" };
+
         expect(adapter.provider).toBe("chatgpt");
         expect(adapter.canHandle(new URL("https://chatgpt.com/c/test"))).toBe(true);
         expect(adapter.getChatId(new URL("https://chatgpt.com/c/test"))).toBeNull();
-        expect(adapter.getChatTitle()).toBeNull();
+        expect(adapter.getChatTitle(document)).toBeNull();
     });
 
     it("includes chat URL builder in the provider contract", () => {

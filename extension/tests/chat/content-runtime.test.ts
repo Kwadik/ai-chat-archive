@@ -17,7 +17,14 @@ describe("runContentScript", () => {
             document,
             () => {},
             () => {},
+            null,
         );
+
+        expect(result).not.toBeNull();
+
+        if (result === null) {
+            throw new Error("Expected supported page context");
+        }
 
         expect(result.context).toEqual({
             provider: "chatgpt",
@@ -36,6 +43,7 @@ describe("runContentScript", () => {
             document,
             () => {},
             () => {},
+            null,
         );
 
         expect(result).toBeNull();

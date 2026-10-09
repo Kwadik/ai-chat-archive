@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_PROJECT_ID } from "../src/project/project-config";
 
 const runBrowserContentScript = vi.fn();
 
@@ -32,7 +31,7 @@ describe("content script", () => {
             "ExtensionApiClient",
         );
 
-        expect(args[3]).toBe(DEFAULT_PROJECT_ID);
+        expect(args[3]).toBeNull();
     });
 
     it("initializes the browser content script with chrome storage and API client", async () => {
