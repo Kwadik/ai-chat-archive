@@ -131,4 +131,28 @@ describe("extension panel", () => {
 
         expect(panel.hidden).toBe(false);
     });
+
+    it("adds a stylesheet inside Shadow DOM", () => {
+        const root = createExtensionRoot(document);
+        createExtensionPanel(root);
+
+        const styles = root.shadowRoot?.querySelector(
+            "style[data-ai-chat-archive-styles]",
+        );
+
+        expect(styles).not.toBeNull();
+    });
+
+    it("does not duplicate the stylesheet", () => {
+        const root = createExtensionRoot(document);
+
+        createExtensionPanel(root);
+        createExtensionPanel(root);
+
+        expect(
+            root.shadowRoot?.querySelectorAll(
+                "style[data-ai-chat-archive-styles]",
+            ).length,
+        ).toBe(1);
+    });
 });

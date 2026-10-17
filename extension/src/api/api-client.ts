@@ -74,4 +74,27 @@ export class ExtensionApiClient {
 
         return response.json();
     }
+
+    async createProject(
+        input: ProjectSummary,
+    ): Promise<ProjectSummary> {
+        const response = await this.fetchFn(
+            `${this.baseUrl}/projects`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(input),
+            },
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `API request failed with status ${response.status}`,
+            );
+        }
+
+        return response.json();
+    }
 }

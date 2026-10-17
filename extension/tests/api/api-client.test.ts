@@ -131,4 +131,50 @@ describe("ExtensionApiClient", () => {
             },
         ]);
     });
+
+    it("creates a project through the local API", async () => {
+        const fetchFn = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    id: "my-project",
+                    name: "My Project",
+                }),
+                {
+                    status: 201,
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                },
+            ),
+        );
+
+        const client = new ExtensionApiClient(
+            "http://127.0.0.1:8000",
+            fetchFn,
+        );
+
+        const project = await client.createProject({
+            id: "my-project",
+            name: "My Project",
+        });
+
+        expect(fetchFn).toHaveBeenCalledWith(
+            "http://127.0.0.1:8000/projects",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    id: "my-project",
+                    name: "My Project",
+                }),
+            },
+        );
+
+        expect(project).toEqual({
+            id: "my-project",
+            name: "My Project",
+        });
+    });
 });

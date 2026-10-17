@@ -46,4 +46,28 @@ describe("extension build", () => {
         expect(contentScript).not.toMatch(/\bimport\s+/);
         expect(contentScript).not.toMatch(/\bexport\s+/);
     });
+
+    it("includes the compiled panel stylesheet in the content script", () => {
+        const extensionRoot = resolve(
+            import.meta.dirname,
+            "..",
+        );
+
+        const contentScriptPath = resolve(
+            extensionRoot,
+            "dist/content-script.js",
+        );
+
+        const contentScript = readFileSync(
+            contentScriptPath,
+            "utf-8",
+        );
+
+        expect(contentScript).toContain(
+            "[data-ai-chat-archive-panel]",
+        );
+        expect(contentScript).toContain(
+            "box-sizing: border-box",
+        );
+    });
 });

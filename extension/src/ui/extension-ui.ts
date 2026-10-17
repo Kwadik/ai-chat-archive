@@ -7,6 +7,7 @@ import { createExtensionRoot } from "./extension-root";
 import {
     createExtensionPanel,
     showExtensionEditor,
+    showProjectCreation,
 } from "./extension-panel";
 
 export interface ExtensionUI {
@@ -15,12 +16,22 @@ export interface ExtensionUI {
     openEditorFromClipboard(): Promise<void>;
 }
 
+
 export function createExtensionUI(
     document: Document,
     context: ChatContext,
     onSave: (markdown: string, context: ChatContext) => void,
     onCancel: () => void,
     clipboard: ClipboardReader | null,
+    options: {
+        selectedProjectId: string | null;
+        createProject: (name: string) => Promise<{ id: string; name: string }>;
+    } = {
+        selectedProjectId: "existing-project",
+        createProject: async () => {
+            throw new Error("Project creation is not configured");
+        },
+    },
 ): ExtensionUI {
     const root = createExtensionRoot(document);
     const panel = createExtensionPanel(root);
@@ -40,10 +51,12 @@ export function createExtensionUI(
         },
 
         async openEditorFromClipboard(): Promise<void> {
-            const markdown = await readMarkdownFromClipboard(
-                clipboard,
-            );
+            if (options.selectedProjectId === null) {
+                showProjectCreation(panel);
+                return;
+            }
 
+            const markdown = await readMarkdownFromClipboard(clipboard);
             this.openEditor(markdown ?? "");
         },
     };

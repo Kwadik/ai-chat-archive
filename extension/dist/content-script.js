@@ -105,6 +105,45 @@
     return editor;
   }
 
+  // src/ui/create-project-template.ts
+  function createProjectForm(document2, templateHtml, initialName = "\u041C\u043E\u0439 \u043F\u0440\u043E\u0435\u043A\u0442") {
+    const template = document2.createElement("template");
+    template.innerHTML = templateHtml.trim();
+    const form = template.content.querySelector(
+      "[data-ai-chat-archive-create-project]"
+    );
+    if (!(form instanceof HTMLFormElement)) {
+      throw new Error("Project creation form template not found");
+    }
+    const nameInput = form.querySelector(
+      "[data-ai-chat-archive-project-name]"
+    );
+    if (!(nameInput instanceof HTMLInputElement)) {
+      throw new Error("Project name input not found");
+    }
+    nameInput.value = initialName;
+    return form;
+  }
+
+  // src/ui/create-stylesheet.ts
+  function createStylesheet(document2, cssText) {
+    const styles = document2.createElement("style");
+    styles.dataset.aiChatArchiveStyles = "";
+    styles.textContent = cssText;
+    return styles;
+  }
+
+  // html-template:E:\PhpstormProjects\ai-chat-offline-viewer\extension\src\ui\templates\create-project.html
+  var create_project_default = '<form data-ai-chat-archive-create-project>\r\n    <label>\r\n        \u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043F\u0440\u043E\u0435\u043A\u0442\u0430\r\n        <input\r\n                type="text"\r\n                data-ai-chat-archive-project-name\r\n                required\r\n        />\r\n    </label>\r\n\r\n    <button type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043F\u0440\u043E\u0435\u043A\u0442</button>\r\n</form>';
+
+  // scss-template:E:\PhpstormProjects\ai-chat-offline-viewer\extension\src\ui\styles\extension-panel.scss
+  var extension_panel_default = "[data-ai-chat-archive-panel] {\n  box-sizing: border-box;\n  font-family: Arial, sans-serif;\n  color: #222;\n}";
+
+  // src/ui/extension-panel-styles.ts
+  function getExtensionPanelStyles() {
+    return extension_panel_default;
+  }
+
   // src/ui/extension-panel.ts
   function createExtensionPanel(root) {
     const existingPanel = root.shadowRoot?.querySelector(
@@ -142,6 +181,11 @@
     content.dataset.aiChatArchiveContent = "";
     panel.appendChild(header);
     panel.appendChild(content);
+    const styles = createStylesheet(
+      panel.ownerDocument,
+      getExtensionPanelStyles()
+    );
+    root.shadowRoot?.prepend(styles);
     root.shadowRoot?.appendChild(panel);
     return panel;
   }
@@ -161,9 +205,30 @@
     content.appendChild(editor);
     panel.hidden = false;
   }
+  function showProjectCreation(panel, initialName = "\u041C\u043E\u0439 \u043F\u0440\u043E\u0435\u043A\u0442") {
+    const content = panel.querySelector(
+      "[data-ai-chat-archive-content]"
+    );
+    if (!(content instanceof HTMLDivElement)) {
+      throw new Error("Extension panel content not found");
+    }
+    content.replaceChildren();
+    const form = createProjectForm(
+      panel.ownerDocument,
+      create_project_default,
+      initialName
+    );
+    content.appendChild(form);
+    panel.hidden = false;
+  }
 
   // src/ui/extension-ui.ts
-  function createExtensionUI(document2, context, onSave, onCancel, clipboard) {
+  function createExtensionUI(document2, context, onSave, onCancel, clipboard, options = {
+    selectedProjectId: "existing-project",
+    createProject: async () => {
+      throw new Error("Project creation is not configured");
+    }
+  }) {
     const root = createExtensionRoot(document2);
     const panel = createExtensionPanel(root);
     return {
@@ -179,9 +244,11 @@
         );
       },
       async openEditorFromClipboard() {
-        const markdown = await readMarkdownFromClipboard(
-          clipboard
-        );
+        if (options.selectedProjectId === null) {
+          showProjectCreation(panel);
+          return;
+        }
+        const markdown = await readMarkdownFromClipboard(clipboard);
         this.openEditor(markdown ?? "");
       }
     };
@@ -302,6 +369,24 @@
         `${this.baseUrl}/projects`,
         {
           method: "GET"
+        }
+      );
+      if (!response.ok) {
+        throw new Error(
+          `API request failed with status ${response.status}`
+        );
+      }
+      return response.json();
+    }
+    async createProject(input) {
+      const response = await this.fetchFn(
+        `${this.baseUrl}/projects`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(input)
         }
       );
       if (!response.ok) {

@@ -1,4 +1,8 @@
 import { createExtensionEditor } from "./extension-editor";
+import { createProjectForm } from "./create-project-template";
+import { createStylesheet } from "./create-stylesheet";
+import createProjectTemplate from "./templates/create-project.html?raw";
+import { getExtensionPanelStyles } from "./extension-panel-styles";
 
 export function createExtensionPanel(
     root: HTMLDivElement,
@@ -49,6 +53,12 @@ export function createExtensionPanel(
     panel.appendChild(header);
     panel.appendChild(content);
 
+    const styles = createStylesheet(
+        panel.ownerDocument,
+        getExtensionPanelStyles(),
+    );
+
+    root.shadowRoot?.prepend(styles);
     root.shadowRoot?.appendChild(panel);
 
     return panel;
@@ -77,6 +87,31 @@ export function showExtensionEditor(
     );
 
     content.appendChild(editor);
+
+    panel.hidden = false;
+}
+
+export function showProjectCreation(
+    panel: HTMLDivElement,
+    initialName = "Мой проект",
+): void {
+    const content = panel.querySelector(
+        "[data-ai-chat-archive-content]",
+    );
+
+    if (!(content instanceof HTMLDivElement)) {
+        throw new Error("Extension panel content not found");
+    }
+
+    content.replaceChildren();
+
+    const form = createProjectForm(
+        panel.ownerDocument,
+        createProjectTemplate,
+        initialName,
+    );
+
+    content.appendChild(form);
 
     panel.hidden = false;
 }

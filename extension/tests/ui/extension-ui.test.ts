@@ -203,4 +203,40 @@ describe("extension UI", () => {
 
         expect(textarea.value).toBe("");
     });
+
+    it("shows project creation instead of opening the editor when no project is selected", async () => {
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            {
+                selectedProjectId: null,
+                createProject: vi.fn(),
+            },
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const shadow = root.shadowRoot;
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-editor]"),
+        ).toBeNull();
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-create-project]"),
+        ).not.toBeNull();
+
+        const nameInput = shadow?.querySelector(
+            "[data-ai-chat-archive-project-name]",
+        ) as HTMLInputElement;
+
+        expect(nameInput.value).toBe("Мой проект");
+    });
 });
