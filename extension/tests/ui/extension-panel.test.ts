@@ -12,6 +12,8 @@ import {
     createExtensionPanel,
     showExtensionEditor,
     showProjectSelection,
+    showHomeScreen,
+    showProjectCreation,
 } from "../../src/ui/extension-panel";
 
 describe("extension panel", () => {
@@ -47,19 +49,44 @@ describe("extension panel", () => {
         expect(closeButton?.textContent).toBe("×");
     });
 
-    it("closes the panel when the close button is clicked", () => {
+    it("shows the open button when the panel is closed", () => {
         const root = createExtensionRoot(document);
         const panel = createExtensionPanel(root);
 
         const closeButton = panel.querySelector(
             "[data-ai-chat-archive-close]",
-        );
+        ) as HTMLButtonElement;
+
+        const openButton = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-open]",
+        ) as HTMLButtonElement;
 
         expect(panel.hidden).toBe(false);
+        expect(openButton.hidden).toBe(true);
 
-        (closeButton as HTMLButtonElement).click();
+        closeButton.click();
 
         expect(panel.hidden).toBe(true);
+        expect(openButton.hidden).toBe(false);
+    });
+
+    it("reopens the panel when the open button is clicked", () => {
+        const root = createExtensionRoot(document);
+        const panel = createExtensionPanel(root);
+
+        const closeButton = panel.querySelector(
+            "[data-ai-chat-archive-close]",
+        ) as HTMLButtonElement;
+
+        const openButton = root.shadowRoot?.querySelector(
+            "[data-ai-chat-archive-open]",
+        ) as HTMLButtonElement;
+
+        closeButton.click();
+        openButton.click();
+
+        expect(panel.hidden).toBe(false);
+        expect(openButton.hidden).toBe(true);
     });
 
     it("keeps the same panel instance", () => {
@@ -178,5 +205,57 @@ describe("extension panel", () => {
         ).not.toBeNull();
 
         expect(panel.hidden).toBe(false);
+    });
+
+    it("shows the home screen with project and message actions", () => {
+        const root = createExtensionRoot(document);
+        const panel = createExtensionPanel(root);
+
+        showHomeScreen(panel, {
+            currentProjectName: "Рабочий проект",
+            onShowProjects: vi.fn(),
+            onCreateProject: vi.fn(),
+            onEditProject: vi.fn(),
+            onSaveChatGPTMessage: vi.fn(),
+            onSaveUserMessage: vi.fn(),
+        });
+
+        expect(panel.textContent).toContain("Рабочий проект");
+        expect(panel.textContent).toContain("Все проекты");
+        expect(panel.textContent).toContain("Создать проект");
+        expect(panel.textContent).toContain("Сохранить сообщение ChatGPT");
+        expect(panel.textContent).toContain("Сохранить своё сообщение");
+    });
+
+    it("uses project creation context for message and initial name", () => {
+        const root = createExtensionRoot(document);
+        const panel = createExtensionPanel(root);
+
+        showProjectCreation(
+            panel,
+            "Мой проект",
+            undefined,
+            undefined,
+            {
+                returnTo: "home",
+                message: "Для сохранения сообщения необходимо выбрать проект",
+                data: {
+                    projectName: "Рабочий проект",
+                },
+            },
+        );
+
+        const message = panel.querySelector(
+            "[data-ai-chat-archive-project-message]",
+        );
+        const nameInput = panel.querySelector(
+            "[data-ai-chat-archive-project-name]",
+        );
+
+        expect(message?.textContent).toBe(
+            "Для сохранения сообщения необходимо выбрать проект",
+        );
+        expect(message).not.toHaveProperty("hidden", true);
+        expect(nameInput).toHaveProperty("value", "Рабочий проект");
     });
 });

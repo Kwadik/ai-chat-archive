@@ -77,8 +77,9 @@ describe("extension build", () => {
         );
         expect(contentScript).toContain("pointer-events: auto");
         expect(contentScript).toContain("position: absolute");
-        expect(contentScript).toContain("min-width: 320px");
-        expect(contentScript).toContain("max-width: 480px");
+        expect(contentScript).toContain(
+            "width: min(480px, 100vw - 32px)",
+        );
         expect(contentScript).toContain("overflow-y: auto");
     });
 });

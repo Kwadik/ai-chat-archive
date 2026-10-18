@@ -2,7 +2,10 @@ import { createExtensionEditor } from "./extension-editor";
 import { createProjectForm } from "./create-project-template";
 import { createStylesheet } from "./create-stylesheet";
 import createProjectTemplate from "./templates/create-project.html?raw";
+import extensionPanelTemplate from "./templates/extension-panel.html?raw";
+import homeTemplate from "./templates/screens/home.html?raw";
 import { getExtensionPanelStyles } from "./extension-panel-styles";
+import type { ProjectCreationContext } from "./navigation-context";
 
 export function createExtensionPanel(
     root: HTMLDivElement,
@@ -15,42 +18,40 @@ export function createExtensionPanel(
         return existingPanel;
     }
 
-    const panel = document.createElement("div");
+    const template = root.ownerDocument.createElement("template");
+    template.innerHTML = extensionPanelTemplate.trim();
 
-    panel.dataset.aiChatArchivePanel = "";
+    const fragment = template.content.cloneNode(true) as DocumentFragment;
 
-    const header = document.createElement("div");
-    header.dataset.aiChatArchiveHeader = "";
+    const panel = fragment.querySelector(
+        "[data-ai-chat-archive-panel]",
+    ) as HTMLDivElement;
 
-    const title = document.createElement("span");
-    title.dataset.aiChatArchiveTitle = "";
-    title.textContent = "AI Chat Archive";
+    const openButton = fragment.querySelector(
+        "[data-ai-chat-archive-open]",
+    ) as HTMLButtonElement;
 
-    const closeButton = document.createElement("button");
-    closeButton.dataset.aiChatArchiveClose = "";
-    closeButton.type = "button";
-    closeButton.textContent = "×";
+    const closeButton = panel.querySelector(
+        "[data-ai-chat-archive-close]",
+    ) as HTMLButtonElement;
 
     closeButton.addEventListener("click", () => {
         panel.hidden = true;
+        openButton.hidden = false;
     });
 
-    header.appendChild(title);
-    header.appendChild(closeButton);
-
-    const content = document.createElement("div");
-    content.dataset.aiChatArchiveContent = "";
-
-    panel.appendChild(header);
-    panel.appendChild(content);
+    openButton.addEventListener("click", () => {
+        panel.hidden = false;
+        openButton.hidden = true;
+    });
 
     const styles = createStylesheet(
-        panel.ownerDocument,
+        root.ownerDocument,
         getExtensionPanelStyles(),
     );
 
     root.shadowRoot?.prepend(styles);
-    root.shadowRoot?.appendChild(panel);
+    root.shadowRoot?.appendChild(fragment);
 
     return panel;
 }
@@ -86,6 +87,8 @@ export function showProjectCreation(
     panel: HTMLDivElement,
     initialName = "Мой проект",
     onSubmit?: (name: string) => void | Promise<void>,
+    onBack?: () => void,
+    context?: ProjectCreationContext,
 ): void {
     const content = panel.querySelector(
         "[data-ai-chat-archive-content]",
@@ -100,8 +103,25 @@ export function showProjectCreation(
     const form = createProjectForm(
         panel.ownerDocument,
         createProjectTemplate,
-        initialName,
+        context?.data?.projectName ?? initialName,
     );
+
+    const message = form.querySelector(
+        "[data-ai-chat-archive-project-message]",
+    );
+
+    if (message instanceof HTMLParagraphElement && context?.message) {
+        message.textContent = context.message;
+        message.hidden = false;
+    }
+
+    const backButton = form.querySelector(
+        "[data-ai-chat-archive-project-back]",
+    );
+
+    if (backButton instanceof HTMLButtonElement && onBack) {
+        backButton.addEventListener("click", onBack);
+    }
 
     form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -170,5 +190,82 @@ export function showProjectSelection(
     selector.appendChild(createButton);
     content.appendChild(selector);
 
+    panel.hidden = false;
+}
+
+export interface HomeScreenOptions {
+    currentProjectName: string | null;
+    onShowProjects: () => void;
+    onCreateProject: () => void;
+    onEditProject: () => void;
+    onSaveChatGPTMessage: () => void;
+    onSaveUserMessage: () => void;
+}
+
+export function showHomeScreen(
+    panel: HTMLDivElement,
+    options: HomeScreenOptions,
+): void {
+    const content = panel.querySelector(
+        "[data-ai-chat-archive-content]",
+    );
+
+    if (!(content instanceof HTMLDivElement)) {
+        throw new Error("Extension panel content not found");
+    }
+
+    const template = panel.ownerDocument.createElement("template");
+    template.innerHTML = homeTemplate.trim();
+
+    const screen = template.content.firstElementChild;
+
+    if (!(screen instanceof HTMLElement)) {
+        throw new Error("Home screen template is empty");
+    }
+
+    const projectName = screen.querySelector(
+        "[data-ai-chat-archive-current-project-name]",
+    );
+
+    if (projectName) {
+        projectName.textContent =
+            options.currentProjectName ?? "Проект не выбран";
+    }
+
+    const bindClick = (
+        selector: string,
+        callback: () => void,
+    ): void => {
+        const button = screen.querySelector(selector);
+
+        if (!(button instanceof HTMLButtonElement)) {
+            throw new Error(`Home screen button not found: ${selector}`);
+        }
+
+        button.addEventListener("click", callback);
+    };
+
+    bindClick(
+        "[data-ai-chat-archive-show-projects]",
+        options.onShowProjects,
+    );
+    bindClick(
+        "[data-ai-chat-archive-create-project]",
+        options.onCreateProject,
+    );
+    bindClick(
+        "[data-ai-chat-archive-edit-project]",
+        options.onEditProject,
+    );
+    bindClick(
+        "[data-ai-chat-archive-save-chatgpt-message]",
+        options.onSaveChatGPTMessage,
+    );
+    bindClick(
+        "[data-ai-chat-archive-save-user-message]",
+        options.onSaveUserMessage,
+    );
+
+    content.replaceChildren(screen);
     panel.hidden = false;
 }

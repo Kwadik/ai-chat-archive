@@ -443,4 +443,242 @@ describe("extension UI", () => {
             )?.value,
         ).toBe("# Сообщение");
     });
+
+    it("opens the home screen and displays the selected project", async () => {
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            {
+                selectedProjectId: "project-1",
+                createProject: vi.fn(),
+                listProjects: vi.fn().mockResolvedValue([
+                    { id: "project-1", name: "Рабочий проект" },
+                ]),
+            },
+        );
+
+        await ui.openHome();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const shadow = root.shadowRoot;
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-home]"),
+        ).not.toBeNull();
+
+        expect(shadow?.textContent).toContain("Рабочий проект");
+    });
+
+    it("returns to the home screen after selecting a project", async () => {
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            {
+                selectedProjectId: null,
+                createProject: vi.fn(),
+                listProjects: vi.fn().mockResolvedValue([
+                    { id: "project-1", name: "Рабочий проект" },
+                ]),
+            },
+        );
+
+        await ui.openHome();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const shadow = root.shadowRoot;
+
+        const showProjectsButton = shadow?.querySelector(
+            "[data-ai-chat-archive-show-projects]",
+        ) as HTMLButtonElement;
+
+        showProjectsButton.click();
+
+        await vi.waitFor(() => {
+            expect(
+                shadow?.querySelector("[data-ai-chat-archive-project-selector]"),
+            ).not.toBeNull();
+        });
+
+        const projectButton = Array.from(
+            shadow?.querySelectorAll("button") ?? [],
+        ).find((button) => button.textContent?.includes("Рабочий проект"));
+
+        expect(projectButton).toBeDefined();
+
+        projectButton?.click();
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-home]"),
+        ).not.toBeNull();
+
+        expect(shadow?.textContent).toContain("Рабочий проект");
+    });
+
+    it("creates a project from the home screen and selects it", async () => {
+        const createProject = vi.fn().mockResolvedValue({
+            id: "project-2",
+            name: "Новый проект",
+        });
+        const saveSelectedProjectId = vi.fn().mockResolvedValue(undefined);
+        const listProjects = vi.fn()
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+                { id: "project-2", name: "Новый проект" },
+            ]);
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            {
+                selectedProjectId: null,
+                createProject,
+                listProjects,
+                saveSelectedProjectId,
+            },
+        );
+
+        await ui.openHome();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+        const shadow = root.shadowRoot;
+
+        const createButton = Array.from(
+            shadow?.querySelectorAll("button") ?? [],
+        ).find((button) => button.textContent?.includes("Создать проект"));
+
+        expect(createButton).toBeDefined();
+        createButton?.click();
+
+        const input = shadow?.querySelector(
+            "[data-ai-chat-archive-project-name]",
+        ) as HTMLInputElement;
+
+        input.value = "Новый проект";
+
+        const form = shadow?.querySelector(
+            "[data-ai-chat-archive-create-project]",
+        ) as HTMLFormElement;
+
+        form.requestSubmit();
+
+        await vi.waitFor(() => {
+            expect(createProject).toHaveBeenCalledWith("Новый проект");
+            expect(saveSelectedProjectId).toHaveBeenCalledWith("project-2");
+        });
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-home]"),
+        ).not.toBeNull();
+        expect(shadow?.textContent).toContain("Новый проект");
+    });
+
+    it("creates a project from project selection and opens the editor", async () => {
+        const createProject = vi.fn().mockResolvedValue({
+            id: "project-2",
+            name: "Новый проект",
+        });
+
+        const listProjects = vi.fn()
+            .mockResolvedValueOnce([
+                { id: "project-1", name: "Рабочий проект" },
+            ])
+            .mockResolvedValueOnce([
+                { id: "project-1", name: "Рабочий проект" },
+            ])
+            .mockResolvedValueOnce([
+                { id: "project-2", name: "Новый проект" },
+            ]);
+
+        const saveSelectedProjectId = vi.fn().mockResolvedValue(undefined);
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            {
+                selectedProjectId: null,
+                createProject,
+                listProjects,
+                saveSelectedProjectId,
+            },
+        );
+
+        await ui.openHome();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+        const shadow = root.shadowRoot;
+
+        const showProjectsButton = Array.from(
+            shadow?.querySelectorAll("button") ?? [],
+        ).find((button) => button.textContent?.includes("Все проекты"));
+
+        showProjectsButton?.click();
+
+        await vi.waitFor(() => {
+            expect(
+                shadow?.querySelector("[data-ai-chat-archive-project-selector]"),
+            ).not.toBeNull();
+        });
+
+        const createButton = shadow?.querySelector(
+            "[data-ai-chat-archive-create-project]",
+        ) as HTMLButtonElement;
+
+        createButton.click();
+
+        const input = shadow?.querySelector(
+            "[data-ai-chat-archive-project-name]",
+        ) as HTMLInputElement;
+
+        input.value = "Новый проект";
+
+        const form = shadow?.querySelector(
+            "form[data-ai-chat-archive-create-project]",
+        ) as HTMLFormElement;
+
+        expect(form).not.toBeNull();
+
+        form.requestSubmit();
+
+        await vi.waitFor(() => {
+            expect(createProject).toHaveBeenCalledWith("Новый проект");
+            expect(saveSelectedProjectId).toHaveBeenCalledWith("project-2");
+        });
+
+        await vi.waitFor(() => {
+            expect(
+                shadow?.querySelector("[data-ai-chat-archive-home]"),
+            ).not.toBeNull();
+
+            expect(
+                shadow?.querySelector(
+                    "[data-ai-chat-archive-current-project-name]",
+                )?.textContent,
+            ).toContain("Новый проект");
+        });
+    });
 });

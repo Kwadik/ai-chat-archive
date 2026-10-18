@@ -1,0 +1,47 @@
+.aca-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aca-space-2);
+}
+
+.aca-actions button {
+  box-sizing: border-box;
+  padding: var(--aca-space-2) var(--aca-space-3);
+  border: 1px solid var(--aca-color-border);
+  border-radius: var(--aca-radius-control);
+  background: var(--aca-color-surface);
+  color: var(--aca-color-text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+          background-color 120ms ease,
+          border-color 120ms ease;
+}
+
+.aca-actions button:hover:not(:disabled) {
+  background: var(--aca-color-surface-hover);
+}
+
+.aca-actions button:focus-visible {
+  outline: 2px solid var(--aca-color-primary);
+  outline-offset: 2px;
+}
+
+.aca-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+[data-ai-chat-archive-open] {
+  pointer-events: auto;
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  padding: 10px 16px;
+  border: 1px solid var(--aca-color-border);
+  border-radius: 999px;
+  background: var(--aca-color-surface);
+  color: var(--aca-color-text);
+  font: inherit;
+  cursor: pointer;
+}

@@ -1,4 +1,9 @@
 <form data-ai-chat-archive-create-project>
+    <p
+            data-ai-chat-archive-project-message
+            role="status"
+            hidden
+    ></p>
     <label>
         Название проекта
         <input
@@ -7,6 +12,11 @@
                 required
         />
     </label>
+
+    <button
+            type="button"
+            data-ai-chat-archive-project-back
+    >Назад</button>
 
     <button type="submit">Создать проект</button>
 </form>
