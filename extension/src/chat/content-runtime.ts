@@ -1,6 +1,7 @@
 import { initializeContentUI } from "./content-ui-runtime";
 import type { ChatContext } from "./chat-context";
 import type { ClipboardReader } from "../clipboard/clipboard";
+import type { ExtensionUIOptions } from "../ui/extension-ui";
 
 interface RuntimeContext {
     location: {
@@ -14,6 +15,7 @@ export function runContentScript(
     onSave: (markdown: string, context: ChatContext) => void,
     onCancel: () => void,
     clipboard: ClipboardReader | null,
+    options?: ExtensionUIOptions
 ) {
     return initializeContentUI(
         document,
@@ -21,5 +23,6 @@ export function runContentScript(
         onSave,
         onCancel,
         clipboard,
+        options
     );
 }

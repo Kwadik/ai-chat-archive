@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runBrowserContentScript } from "../../src/chat/browser-content-runtime";
 import type { ExtensionApiClient } from "../../src/api/api-client";
+import type { ExtensionUIOptions } from "../../src/ui/extension-ui";
 
 describe("runBrowserContentScript", () => {
     it("uses the browser window location and document", () => {
@@ -152,11 +153,21 @@ describe("runBrowserContentScript", () => {
 
         const onSave = vi.fn();
 
+        const uiOptions: Omit<ExtensionUIOptions, "selectedProjectId"> & {
+            selectedProjectId: string | null;
+        } = {
+            selectedProjectId: null,
+            createProject: vi.fn(),
+            listProjects: vi.fn(),
+            saveSelectedProjectId: vi.fn(),
+        };
+
         const ui = runBrowserContentScript(
             onSave,
             () => {},
             apiClient,
-            "default",
+            null,
+            uiOptions,
         );
 
         expect(ui).not.toBeNull();
@@ -171,10 +182,12 @@ describe("runBrowserContentScript", () => {
             "[data-ai-chat-archive-save]",
         ) as HTMLButtonElement;
 
+        uiOptions.selectedProjectId = "new-project";
+
         saveButton.click();
 
         expect(apiClient.createMessage).toHaveBeenCalledWith({
-            projectId: "default",
+            projectId: "new-project",
             provider: "chatgpt",
             chatId: "chat-123",
             role: "user",

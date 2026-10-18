@@ -137,7 +137,7 @@
   var create_project_default = '<form data-ai-chat-archive-create-project>\r\n    <label>\r\n        \u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043F\u0440\u043E\u0435\u043A\u0442\u0430\r\n        <input\r\n                type="text"\r\n                data-ai-chat-archive-project-name\r\n                required\r\n        />\r\n    </label>\r\n\r\n    <button type="submit">\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043F\u0440\u043E\u0435\u043A\u0442</button>\r\n</form>';
 
   // scss-template:E:\PhpstormProjects\ai-chat-offline-viewer\extension\src\ui\styles\extension-panel.scss
-  var extension_panel_default = "[data-ai-chat-archive-panel] {\n  box-sizing: border-box;\n  font-family: Arial, sans-serif;\n  color: #222;\n}";
+  var extension_panel_default = "[data-ai-chat-archive-panel] {\n  box-sizing: border-box;\n  font-family: Arial, sans-serif;\n  color: #222;\n  pointer-events: auto;\n  position: absolute;\n  top: 16px;\n  right: 16px;\n  min-width: 320px;\n  max-width: 480px;\n  max-height: calc(100vh - 32px);\n  overflow-y: auto;\n  background: white;\n}";
 
   // src/ui/extension-panel-styles.ts
   function getExtensionPanelStyles() {
@@ -154,15 +154,6 @@
     }
     const panel = document.createElement("div");
     panel.dataset.aiChatArchivePanel = "";
-    panel.style.pointerEvents = "auto";
-    panel.style.position = "absolute";
-    panel.style.top = "16px";
-    panel.style.right = "16px";
-    panel.style.minWidth = "320px";
-    panel.style.maxWidth = "480px";
-    panel.style.maxHeight = "calc(100vh - 32px)";
-    panel.style.overflowY = "auto";
-    panel.style.background = "white";
     const header = document.createElement("div");
     header.dataset.aiChatArchiveHeader = "";
     const title = document.createElement("span");
@@ -205,7 +196,7 @@
     content.appendChild(editor);
     panel.hidden = false;
   }
-  function showProjectCreation(panel, initialName = "\u041C\u043E\u0439 \u043F\u0440\u043E\u0435\u043A\u0442") {
+  function showProjectCreation(panel, initialName = "\u041C\u043E\u0439 \u043F\u0440\u043E\u0435\u043A\u0442", onSubmit) {
     const content = panel.querySelector(
       "[data-ai-chat-archive-content]"
     );
@@ -218,7 +209,51 @@
       create_project_default,
       initialName
     );
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!onSubmit) {
+        return;
+      }
+      const nameInput = form.querySelector(
+        "[data-ai-chat-archive-project-name]"
+      );
+      if (!(nameInput instanceof HTMLInputElement)) {
+        throw new Error("Project name input not found");
+      }
+      void onSubmit(nameInput.value.trim());
+    });
     content.appendChild(form);
+    panel.hidden = false;
+  }
+  function showProjectSelection(panel, projects, onSelect, onCreateProject) {
+    const content = panel.querySelector(
+      "[data-ai-chat-archive-content]"
+    );
+    if (!(content instanceof HTMLDivElement)) {
+      throw new Error("Extension panel content not found");
+    }
+    content.replaceChildren();
+    const selector = panel.ownerDocument.createElement("div");
+    selector.dataset.aiChatArchiveProjectSelector = "";
+    const title = panel.ownerDocument.createElement("h2");
+    title.textContent = "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043F\u0440\u043E\u0435\u043A\u0442";
+    selector.appendChild(title);
+    for (const project of projects) {
+      const button = panel.ownerDocument.createElement("button");
+      button.type = "button";
+      button.textContent = project.name;
+      button.addEventListener("click", () => {
+        onSelect(project.id);
+      });
+      selector.appendChild(button);
+    }
+    const createButton = panel.ownerDocument.createElement("button");
+    createButton.type = "button";
+    createButton.dataset.aiChatArchiveCreateProject = "";
+    createButton.textContent = "\u0421\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u0435\u043A\u0442";
+    createButton.addEventListener("click", onCreateProject);
+    selector.appendChild(createButton);
+    content.appendChild(selector);
     panel.hidden = false;
   }
 
@@ -227,7 +262,8 @@
     selectedProjectId: "existing-project",
     createProject: async () => {
       throw new Error("Project creation is not configured");
-    }
+    },
+    listProjects: async () => []
   }) {
     const root = createExtensionRoot(document2);
     const panel = createExtensionPanel(root);
@@ -244,29 +280,66 @@
         );
       },
       async openEditorFromClipboard() {
+        const markdown = await readMarkdownFromClipboard(clipboard);
+        const projects = options.selectedProjectId === null ? await options.listProjects() : [];
         if (options.selectedProjectId === null) {
-          showProjectCreation(panel);
+          if (projects.length > 0) {
+            showProjectSelection(
+              panel,
+              projects,
+              async (projectId) => {
+                await options.saveSelectedProjectId?.(projectId);
+                options.selectedProjectId = projectId;
+                this.openEditor(markdown ?? "");
+              },
+              () => {
+                showProjectCreation(panel, "\u041C\u043E\u0439 \u043F\u0440\u043E\u0435\u043A\u0442", async (name) => {
+                  const project = await options.createProject(name);
+                  await options.saveSelectedProjectId?.(project.id);
+                  options.selectedProjectId = project.id;
+                  showExtensionEditor(
+                    panel,
+                    markdown ?? "",
+                    (markdown2) => onSave(markdown2, context),
+                    onCancel
+                  );
+                });
+              }
+            );
+            return;
+          }
+          showProjectCreation(panel, "\u041C\u043E\u0439 \u043F\u0440\u043E\u0435\u043A\u0442", async (name) => {
+            const project = await options.createProject(name);
+            await options.saveSelectedProjectId?.(project.id);
+            options.selectedProjectId = project.id;
+            showExtensionEditor(
+              panel,
+              markdown ?? "",
+              (markdown2) => onSave(markdown2, context),
+              onCancel
+            );
+          });
           return;
         }
-        const markdown = await readMarkdownFromClipboard(clipboard);
         this.openEditor(markdown ?? "");
       }
     };
   }
 
   // src/chat/content-ui.ts
-  function createContentUI(document2, context, onSave, onCancel, clipboard) {
+  function createContentUI(document2, context, onSave, onCancel, clipboard, options) {
     return createExtensionUI(
       document2,
       context,
       onSave,
       onCancel,
-      clipboard
+      clipboard,
+      options
     );
   }
 
   // src/chat/content-ui-runtime.ts
-  function initializeContentUI(document2, url, onSave, onCancel, clipboard) {
+  function initializeContentUI(document2, url, onSave, onCancel, clipboard, options) {
     const context = getCurrentChatContext(
       url,
       {
@@ -281,18 +354,20 @@
       context,
       onSave,
       onCancel,
-      clipboard
+      clipboard,
+      options
     );
   }
 
   // src/chat/content-runtime.ts
-  function runContentScript(runtime, document2, onSave, onCancel, clipboard) {
+  function runContentScript(runtime, document2, onSave, onCancel, clipboard, options) {
     return initializeContentUI(
       document2,
       new URL(runtime.location.href),
       onSave,
       onCancel,
-      clipboard
+      clipboard,
+      options
     );
   }
 
@@ -310,7 +385,7 @@
   // src/chat/browser-content-runtime.ts
   function runBrowserContentScript(onSave = () => {
   }, onCancel = () => {
-  }, apiClient, projectId = null) {
+  }, apiClient, projectId = null, uiOptions) {
     return runContentScript(
       {
         location: {
@@ -319,18 +394,20 @@
       },
       document,
       (markdown, context) => {
-        if (apiClient && projectId !== null) {
+        const selectedProjectId = uiOptions?.selectedProjectId ?? projectId;
+        if (apiClient && selectedProjectId !== null) {
           void saveMessage(
             apiClient,
             context,
             markdown,
-            projectId
+            selectedProjectId
           );
         }
         onSave(markdown, context);
       },
       onCancel,
-      navigator.clipboard ?? null
+      navigator.clipboard ?? null,
+      uiOptions
     );
   }
 
@@ -411,6 +488,11 @@
 
   // src/storage/extension-storage.ts
   var SELECTED_PROJECT_KEY = "selectedProjectId";
+  async function setStoredProjectId(projectId, storage) {
+    await storage.local.set({
+      [SELECTED_PROJECT_KEY]: projectId
+    });
+  }
   async function getStoredProjectId(storage) {
     const values = await storage.local.get(
       SELECTED_PROJECT_KEY
@@ -429,13 +511,23 @@
   async function initializeBrowserContentScript(chrome2, apiClient, run = runBrowserContentScript) {
     const storage = getBrowserStorage(chrome2);
     const projectId = await getSelectedProjectId(storage);
+    const uiOptions = {
+      selectedProjectId: projectId,
+      listProjects: () => apiClient.listProjects(),
+      createProject: (name) => apiClient.createProject({
+        id: crypto.randomUUID(),
+        name
+      }),
+      saveSelectedProjectId: (id) => setStoredProjectId(id, storage)
+    };
     run(
       () => {
       },
       () => {
       },
       apiClient,
-      projectId
+      projectId,
+      uiOptions
     );
   }
 

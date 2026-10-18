@@ -214,6 +214,7 @@ describe("extension UI", () => {
             {
                 selectedProjectId: null,
                 createProject: vi.fn(),
+                listProjects: vi.fn().mockResolvedValue([]),
             },
         );
 
@@ -238,5 +239,208 @@ describe("extension UI", () => {
         ) as HTMLInputElement;
 
         expect(nameInput.value).toBe("Мой проект");
+    });
+
+    it("shows project selection when projects exist but none is selected", async () => {
+        const listProjects = vi.fn().mockResolvedValue([
+            { id: "project-1", name: "Рабочий проект" },
+            { id: "project-2", name: "Личный проект" },
+        ]);
+
+        const options = {
+            selectedProjectId: null,
+            createProject: vi.fn(),
+            listProjects,
+        };
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            options,
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const shadow = root.shadowRoot;
+
+        expect(listProjects).toHaveBeenCalledOnce();
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-project-selector]"),
+        ).not.toBeNull();
+
+        expect(shadow?.textContent).toContain("Рабочий проект");
+        expect(shadow?.textContent).toContain("Личный проект");
+
+        expect(
+            shadow?.querySelector("[data-ai-chat-archive-create-project]"),
+        ).not.toBeNull();
+    });
+
+    it("creates a project when the project creation form is submitted", async () => {
+        const createProject = vi.fn().mockResolvedValue({
+            id: "new-project",
+            name: "Рабочий проект",
+        });
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            null,
+            {
+                selectedProjectId: null,
+                createProject,
+                listProjects: vi.fn().mockResolvedValue([]),
+            },
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const shadow = root.shadowRoot;
+
+        const nameInput = shadow?.querySelector(
+            "[data-ai-chat-archive-project-name]",
+        ) as HTMLInputElement;
+
+        const form = shadow?.querySelector(
+            "[data-ai-chat-archive-create-project]",
+        ) as HTMLFormElement;
+
+        nameInput.value = "Рабочий проект";
+        form.dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+        );
+
+        await Promise.resolve();
+
+        expect(createProject).toHaveBeenCalledWith("Рабочий проект");
+    });
+
+    it("opens the editor after creating a project", async () => {
+        const createProject = vi.fn().mockResolvedValue({
+            id: "new-project",
+            name: "Рабочий проект",
+        });
+
+        const saveSelectedProjectId = vi.fn().mockResolvedValue(undefined);
+
+        const clipboard = {
+            readText: vi.fn().mockResolvedValue("# Скопированное сообщение"),
+        };
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            clipboard,
+            {
+                selectedProjectId: null,
+                createProject,
+                listProjects: vi.fn().mockResolvedValue([]),
+                saveSelectedProjectId,
+            },
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+
+        const shadow = root.shadowRoot;
+
+        const nameInput = shadow?.querySelector(
+            "[data-ai-chat-archive-project-name]",
+        ) as HTMLInputElement;
+
+        const form = shadow?.querySelector(
+            "[data-ai-chat-archive-create-project]",
+        ) as HTMLFormElement;
+
+        nameInput.value = "Рабочий проект";
+        form.dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+        );
+
+        await vi.waitFor(() => {
+            expect(
+                shadow?.querySelector("[data-ai-chat-archive-editor]"),
+            ).not.toBeNull();
+        });
+
+        expect(
+            shadow?.querySelector<HTMLTextAreaElement>(
+                "[data-ai-chat-archive-editor]",
+            )?.value,
+        ).toBe("# Скопированное сообщение");
+
+        expect(saveSelectedProjectId).toHaveBeenCalledWith("new-project");
+    });
+
+    it("opens the editor after selecting an existing project", async () => {
+        const listProjects = vi.fn().mockResolvedValue([
+            { id: "project-1", name: "Рабочий проект" },
+            { id: "project-2", name: "Личный проект" },
+        ]);
+        const saveSelectedProjectId = vi.fn().mockResolvedValue(undefined);
+
+        const ui = createExtensionUI(
+            document,
+            context,
+            vi.fn(),
+            vi.fn(),
+            {
+                readText: vi.fn().mockResolvedValue("# Сообщение"),
+            },
+            {
+                selectedProjectId: null,
+                createProject: vi.fn(),
+                listProjects,
+                saveSelectedProjectId,
+            },
+        );
+
+        await ui.openEditorFromClipboard();
+
+        const root = document.querySelector(
+            "#ai-chat-archive-root",
+        ) as HTMLDivElement;
+        const shadow = root.shadowRoot;
+
+        const projectButton = Array.from(
+            shadow?.querySelectorAll("button") ?? [],
+        ).find((button) => button.textContent === "Рабочий проект");
+
+        expect(projectButton).toBeDefined();
+
+        projectButton?.click();
+
+        await vi.waitFor(() => {
+            expect(
+                shadow?.querySelector("[data-ai-chat-archive-editor]"),
+            ).not.toBeNull();
+        });
+
+        expect(saveSelectedProjectId).toHaveBeenCalledWith("project-1");
+
+        expect(
+            shadow?.querySelector<HTMLTextAreaElement>(
+                "[data-ai-chat-archive-editor]",
+            )?.value,
+        ).toBe("# Сообщение");
     });
 });

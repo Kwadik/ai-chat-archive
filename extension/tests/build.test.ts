@@ -53,6 +53,12 @@ describe("extension build", () => {
             "..",
         );
 
+        execSync("npm run build", {
+            cwd: extensionRoot,
+            stdio: "pipe",
+            shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
+        });
+
         const contentScriptPath = resolve(
             extensionRoot,
             "dist/content-script.js",
@@ -69,5 +75,10 @@ describe("extension build", () => {
         expect(contentScript).toContain(
             "box-sizing: border-box",
         );
+        expect(contentScript).toContain("pointer-events: auto");
+        expect(contentScript).toContain("position: absolute");
+        expect(contentScript).toContain("min-width: 320px");
+        expect(contentScript).toContain("max-width: 480px");
+        expect(contentScript).toContain("overflow-y: auto");
     });
 });

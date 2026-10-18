@@ -34,6 +34,12 @@ describe("initializeBrowserContentScript", () => {
             expect.any(Function),
             apiClient,
             "project-browser",
+            expect.objectContaining({
+                selectedProjectId: "project-browser",
+                listProjects: expect.any(Function),
+                createProject: expect.any(Function),
+                saveSelectedProjectId: expect.any(Function),
+            }),
         );
     });
 
@@ -69,6 +75,12 @@ describe("initializeBrowserContentScript", () => {
             expect.any(Function),
             apiClient,
             "project-browser",
+            expect.objectContaining({
+                selectedProjectId: "project-browser",
+                listProjects: expect.any(Function),
+                createProject: expect.any(Function),
+                saveSelectedProjectId: expect.any(Function),
+            }),
         );
     });
 
@@ -81,7 +93,9 @@ describe("initializeBrowserContentScript", () => {
         };
 
         const chrome = { storage };
-        const apiClient = {} as ExtensionApiClient;
+        const apiClient = {
+            listProjects: vi.fn().mockResolvedValue([]),
+        } as unknown as ExtensionApiClient;
         const runBrowserContentScript = vi.fn();
 
         const { initializeBrowserContentScript } = await import(
@@ -99,6 +113,12 @@ describe("initializeBrowserContentScript", () => {
             expect.any(Function),
             apiClient,
             null,
+            expect.objectContaining({
+                selectedProjectId: null,
+                listProjects: expect.any(Function),
+                createProject: expect.any(Function),
+                saveSelectedProjectId: expect.any(Function),
+            }),
         );
     });
 });

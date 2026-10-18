@@ -8,6 +8,7 @@ import {
     createExtensionPanel,
     showExtensionEditor,
     showProjectCreation,
+    showProjectSelection,
 } from "./extension-panel";
 
 export interface ExtensionUI {
@@ -16,6 +17,12 @@ export interface ExtensionUI {
     openEditorFromClipboard(): Promise<void>;
 }
 
+export interface ExtensionUIOptions {
+    selectedProjectId: string | null;
+    createProject: (name: string) => Promise<{ id: string; name: string }>;
+    listProjects: () => Promise<{ id: string; name: string }[]>;
+    saveSelectedProjectId?: (projectId: string) => Promise<void>;
+}
 
 export function createExtensionUI(
     document: Document,
@@ -23,14 +30,12 @@ export function createExtensionUI(
     onSave: (markdown: string, context: ChatContext) => void,
     onCancel: () => void,
     clipboard: ClipboardReader | null,
-    options: {
-        selectedProjectId: string | null;
-        createProject: (name: string) => Promise<{ id: string; name: string }>;
-    } = {
+    options: ExtensionUIOptions = {
         selectedProjectId: "existing-project",
         createProject: async () => {
             throw new Error("Project creation is not configured");
         },
+        listProjects: async () => [],
     },
 ): ExtensionUI {
     const root = createExtensionRoot(document);
@@ -51,12 +56,54 @@ export function createExtensionUI(
         },
 
         async openEditorFromClipboard(): Promise<void> {
+            const markdown = await readMarkdownFromClipboard(clipboard);
+            const projects = options.selectedProjectId === null
+                ? await options.listProjects()
+                : [];
+
             if (options.selectedProjectId === null) {
-                showProjectCreation(panel);
+                if (projects.length > 0) {
+                    showProjectSelection(
+                        panel,
+                        projects,
+                        async (projectId) => {
+                            await options.saveSelectedProjectId?.(projectId);
+                            options.selectedProjectId = projectId;
+                            this.openEditor(markdown ?? "");
+                        },
+                        () => {
+                            showProjectCreation(panel, "Мой проект", async (name) => {
+                                const project = await options.createProject(name);
+                                await options.saveSelectedProjectId?.(project.id);
+                                options.selectedProjectId = project.id;
+
+                                showExtensionEditor(
+                                    panel,
+                                    markdown ?? "",
+                                    (markdown) => onSave(markdown, context),
+                                    onCancel,
+                                );
+                            });
+                        },
+                    );
+                    return;
+                }
+
+                showProjectCreation(panel, "Мой проект", async (name) => {
+                    const project = await options.createProject(name);
+                    await options.saveSelectedProjectId?.(project.id);
+                    options.selectedProjectId = project.id;
+
+                    showExtensionEditor(
+                        panel,
+                        markdown ?? "",
+                        (markdown) => onSave(markdown, context),
+                        onCancel,
+                    );
+                });
                 return;
             }
 
-            const markdown = await readMarkdownFromClipboard(clipboard);
             this.openEditor(markdown ?? "");
         },
     };

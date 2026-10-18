@@ -1,4 +1,5 @@
 import { runContentScript } from "./content-runtime";
+import type { ExtensionUIOptions } from "../ui/extension-ui";
 import type { ChatContext } from "./chat-context";
 import type { ClipboardReader } from "../clipboard/clipboard";
 import type { ExtensionApiClient } from "../api/api-client";
@@ -9,6 +10,7 @@ export function runBrowserContentScript(
     onCancel: () => void = () => {},
     apiClient?: ExtensionApiClient,
     projectId: string | null = null,
+    uiOptions?: ExtensionUIOptions
 ) {
     return runContentScript(
         {
@@ -18,12 +20,14 @@ export function runBrowserContentScript(
         },
         document,
         (markdown, context) => {
-            if (apiClient && projectId !== null) {
+            const selectedProjectId = uiOptions?.selectedProjectId ?? projectId;
+
+            if (apiClient && selectedProjectId !== null) {
                 void saveMessage(
                     apiClient,
                     context,
                     markdown,
-                    projectId,
+                    selectedProjectId,
                 );
             }
 
@@ -31,5 +35,6 @@ export function runBrowserContentScript(
         },
         onCancel,
         navigator.clipboard ?? null,
+        uiOptions
     );
 }

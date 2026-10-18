@@ -20,9 +20,19 @@ describe("content script", () => {
             },
         });
 
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: true,
+                json: vi.fn().mockResolvedValue([]),
+            }),
+        );
+
         await import("../src/content-script");
 
-        expect(runBrowserContentScript).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => {
+            expect(runBrowserContentScript).toHaveBeenCalledTimes(1);
+        });
 
         const args = runBrowserContentScript.mock.calls[0];
 

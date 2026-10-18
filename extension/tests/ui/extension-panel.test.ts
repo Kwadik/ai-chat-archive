@@ -11,6 +11,7 @@ import { createExtensionRoot } from "../../src/ui/extension-root";
 import {
     createExtensionPanel,
     showExtensionEditor,
+    showProjectSelection,
 } from "../../src/ui/extension-panel";
 
 describe("extension panel", () => {
@@ -154,5 +155,28 @@ describe("extension panel", () => {
                 "style[data-ai-chat-archive-styles]",
             ).length,
         ).toBe(1);
+    });
+
+    it("shows available projects for selection", () => {
+        const root = createExtensionRoot(document);
+        const panel = createExtensionPanel(root);
+
+        showProjectSelection(panel, [
+            { id: "project-1", name: "Рабочий проект" },
+            { id: "project-2", name: "Личный проект" },
+        ], vi.fn(), vi.fn());
+
+        expect(
+            panel.querySelector("[data-ai-chat-archive-project-selector]"),
+        ).not.toBeNull();
+
+        expect(panel.textContent).toContain("Рабочий проект");
+        expect(panel.textContent).toContain("Личный проект");
+
+        expect(
+            panel.querySelector("[data-ai-chat-archive-create-project]"),
+        ).not.toBeNull();
+
+        expect(panel.hidden).toBe(false);
     });
 });
